@@ -111,7 +111,8 @@ const STORAGE_KEYS = {
   MASSEUSE_OVERRIDES: 'masseuse_app_masseuse_overrides_v1',
   ASSIGNMENTS: 'masseuse_app_behavior_assignments',
   EVALUATIONS: 'masseuse_app_evaluations_v1',
-  SETTINGS: 'masseuse_app_system_settings_v1'
+  SETTINGS: 'masseuse_app_system_settings_v1',
+  EVALUATIONS_RESET_AT: 'masseuse_app_evaluations_reset_at_v1'
 };
 
 // --- Cloud Sync Realtime Serverless Integration ---
@@ -232,6 +233,18 @@ export async function pullFromCloud() {
     }
 
     if (data) {
+      // 0. Check evaluations reset timestamp
+      if (data.evaluationsResetAt) {
+        const localResetAt = Number(localStorage.getItem(STORAGE_KEYS.EVALUATIONS_RESET_AT) || 0);
+        if (data.evaluationsResetAt > localResetAt) {
+          localStorage.setItem(STORAGE_KEYS.EVALUATIONS_RESET_AT, data.evaluationsResetAt.toString());
+          localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify({}));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: {} }));
+          }
+        }
+      }
+
       // Smart union merge for custom staff so local staff is never lost
       if (Array.isArray(data.customStaff)) {
         const localCustom = getCustomStaff();
@@ -258,17 +271,30 @@ export async function pullFromCloud() {
         localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify({ ...localMasseuseOverrides, ...data.masseuseOverrides }));
       }
       if (data.evaluations && typeof data.evaluations === 'object') {
-        const localEvals = getEvaluations();
-        const mergedEvals = mergeEvaluations(localEvals, data.evaluations);
-        localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(mergedEvals));
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: mergedEvals }));
+        const localResetAt = Number(localStorage.getItem(STORAGE_KEYS.EVALUATIONS_RESET_AT) || 0);
+        const cloudResetAt = Number(data.evaluationsResetAt || 0);
+
+        if (Object.keys(data.evaluations).length === 0 && (cloudResetAt >= localResetAt || localResetAt > 0)) {
+          // Cloud evaluations are reset and empty
+          localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify({}));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: {} }));
+          }
+        } else if (localResetAt > cloudResetAt && Object.keys(getEvaluations()).length === 0) {
+          // Local reset is newer than cloud data; do not restore old cloud evaluations
+        } else {
+          const localEvals = getEvaluations();
+          const mergedEvals = mergeEvaluations(localEvals, data.evaluations);
+          localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(mergedEvals));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: mergedEvals }));
+          }
         }
       }
       if (data.settings && typeof data.settings === 'object') {
         localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(data.settings));
       }
-      if (data.assignments && typeof data.assignments === 'object') {
+      if (data.assignments && typeof data.assignments === 'object' && Object.keys(data.assignments).length > 0) {
         localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(data.assignments));
       }
       isPullingCloud = false;
@@ -284,21 +310,26 @@ export async function pullFromCloud() {
 let isPushing = false;
 let pendingPush = false;
 
-export async function pushToCloud() {
+export async function pushToCloud(options = {}) {
   if (isPushing) {
     pendingPush = true;
     return false;
   }
   isPushing = true;
   try {
+    const isReset = Boolean(options.resetEvaluations || options.resetAll);
+    const resetAt = options.evaluationsResetAt || Number(localStorage.getItem(STORAGE_KEYS.EVALUATIONS_RESET_AT) || 0);
     const payload = {
       customStaff: getCustomStaff(),
       staffOverrides: getStaffOverrides(),
       customMasseuses: getCustomMasseuses(),
       masseuseOverrides: getMasseuseOverrides(),
-      evaluations: getEvaluations(),
+      evaluations: isReset ? {} : getEvaluations(),
       settings: getSystemSettings(),
-      assignments: getBehaviorAssignments()
+      assignments: getBehaviorAssignments(),
+      resetEvaluations: isReset,
+      resetAll: Boolean(options.resetAll),
+      evaluationsResetAt: resetAt
     };
     const res = await fetch(getCloudApiUrl(), {
       method: 'POST',
@@ -922,20 +953,42 @@ export function seedMockEvaluations() {
 }
 
 // Clear evaluation scores only for system reset
-export function resetEvaluationsOnly() {
-  localStorage.removeItem(STORAGE_KEYS.EVALUATIONS);
-  generateBehaviorAssignments();
-  pushToCloud();
+export async function resetEvaluationsOnly() {
+  const resetTime = Date.now();
+  localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify({}));
+  localStorage.setItem(STORAGE_KEYS.EVALUATIONS_RESET_AT, resetTime.toString());
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: {} }));
+  }
+
+  return await pushToCloud({
+    resetEvaluations: true,
+    evaluationsResetAt: resetTime
+  });
 }
 
 // Clear all data
-export function resetAllData() {
+export async function resetAllData() {
+  const resetTime = Date.now();
   localStorage.removeItem(STORAGE_KEYS.EVALUATIONS);
   localStorage.removeItem(STORAGE_KEYS.CUSTOM_MASSEUSES);
   localStorage.removeItem(STORAGE_KEYS.MASSEUSE_OVERRIDES);
   localStorage.removeItem(STORAGE_KEYS.CUSTOM_STAFF);
   localStorage.removeItem(STORAGE_KEYS.STAFF_OVERRIDES);
   localStorage.removeItem(STORAGE_KEYS.SETTINGS);
+  localStorage.removeItem(STORAGE_KEYS.ASSIGNMENTS);
+  localStorage.setItem(STORAGE_KEYS.EVALUATIONS_RESET_AT, resetTime.toString());
+
   generateBehaviorAssignments();
-  pushToCloud();
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: {} }));
+  }
+
+  return await pushToCloud({
+    resetAll: true,
+    resetEvaluations: true,
+    evaluationsResetAt: resetTime
+  });
 }

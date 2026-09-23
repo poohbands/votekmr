@@ -10,7 +10,8 @@ const DEFAULT_DATA = {
   masseuseOverrides: {},
   evaluations: {},
   settings: { deadline: null, isLockedManually: false },
-  assignments: {}
+  assignments: {},
+  evaluationsResetAt: 0
 };
 
 let inMemoryStore = null;
@@ -99,8 +100,13 @@ async function loadLatestData() {
     console.warn('Blob read warning:', err);
   }
 
+  const blobReset = Number(blobData?.evaluationsResetAt || 0);
+  const memReset = Number(inMemoryStore?.evaluationsResetAt || 0);
+  const maxReset = Math.max(blobReset, memReset);
+
   // Merge in-memory and blob data
   const base = inMemoryStore ? { ...DEFAULT_DATA, ...blobData, ...inMemoryStore } : { ...DEFAULT_DATA, ...blobData };
+  base.evaluationsResetAt = maxReset;
 
   // Re-merge arrays cleanly
   if (blobData && inMemoryStore) {
@@ -116,7 +122,15 @@ async function loadLatestData() {
 
     base.staffOverrides = { ...(blobData.staffOverrides || {}), ...(inMemoryStore.staffOverrides || {}) };
     base.masseuseOverrides = { ...(blobData.masseuseOverrides || {}), ...(inMemoryStore.masseuseOverrides || {}) };
-    base.evaluations = mergeEvaluations(blobData.evaluations, inMemoryStore.evaluations);
+
+    if (blobReset > memReset) {
+      base.evaluations = blobData.evaluations || {};
+    } else if (memReset > blobReset) {
+      base.evaluations = inMemoryStore.evaluations || {};
+    } else {
+      base.evaluations = mergeEvaluations(blobData.evaluations, inMemoryStore.evaluations);
+    }
+
     base.settings = { ...(blobData.settings || {}), ...(inMemoryStore.settings || {}) };
     base.assignments = { ...(blobData.assignments || {}), ...(inMemoryStore.assignments || {}) };
   }
@@ -181,14 +195,35 @@ export default async function handler(req, res) {
           m => !currentData.masseuseOverrides?.[m.id]?.isDeleted
         );
 
-        if (payload.evaluations && typeof payload.evaluations === 'object') {
-          currentData.evaluations = mergeEvaluations(currentData.evaluations, payload.evaluations);
+        if (payload.resetAll) {
+          const resetTime = payload.evaluationsResetAt || Date.now();
+          currentData.evaluations = {};
+          currentData.evaluationsResetAt = resetTime;
+          currentData.customStaff = [];
+          currentData.staffOverrides = {};
+          currentData.customMasseuses = [];
+          currentData.masseuseOverrides = {};
+          currentData.assignments = {};
+          currentData.settings = { deadline: null, isLockedManually: false };
+        } else if (payload.resetEvaluations) {
+          const resetTime = payload.evaluationsResetAt || Date.now();
+          currentData.evaluations = {};
+          currentData.evaluationsResetAt = resetTime;
+        } else if (payload.evaluations && typeof payload.evaluations === 'object') {
+          const payloadResetAt = Number(payload.evaluationsResetAt || 0);
+          const currentResetAt = Number(currentData.evaluationsResetAt || 0);
+
+          if (payloadResetAt >= currentResetAt) {
+            currentData.evaluations = mergeEvaluations(currentData.evaluations, payload.evaluations);
+          } else {
+            console.log('Ignored stale client evaluations sent before reset:', payloadResetAt, '<', currentResetAt);
+          }
         }
 
-        if (payload.settings) {
+        if (payload.settings && !payload.resetAll) {
           currentData.settings = { ...(currentData.settings || {}), ...payload.settings };
         }
-        if (payload.assignments) {
+        if (payload.assignments && !payload.resetAll) {
           currentData.assignments = { ...(currentData.assignments || {}), ...payload.assignments };
         }
         currentData.updatedAt = Date.now();

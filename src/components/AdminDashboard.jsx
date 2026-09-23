@@ -104,6 +104,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
   const [inputIsLocked, setInputIsLocked] = useState(false);
   const [inputIsMaintenance, setInputIsMaintenance] = useState(false);
   const [inputMaintenanceMessage, setInputMaintenanceMessage] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
 
   const loadDashboardData = () => {
     const calculated = calculateResults();
@@ -296,11 +297,19 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
   };
 
   // 1-Click System Evaluation Reset
-  const handleResetEvaluations = () => {
-    if (window.confirm('⚠️ ยืนยันการรีเซ็ต: คุณต้องการล้างข้อมูลคะแนนประเมินของเจ้าหน้าที่ทุกคนในระบบกลับเป็นเริ่มต้นใช่หรือไม่?')) {
-      resetEvaluationsOnly();
-      loadDashboardData();
-      showNotice('🔄 รีเซ็ตข้อมูลคะแนนประเมินของทั้งระบบเรียบร้อยแล้ว!');
+  const handleResetEvaluations = async () => {
+    if (window.confirm('⚠️ ยืนยันการรีเซ็ตคะแนนประเมิน: คุณต้องการล้างข้อมูลคะแนนประเมินของหมอนวดและผู้ประเมินทุกคนในระบบให้เป็นค่าว่างทั้งหมดใช่หรือไม่?')) {
+      setIsResetting(true);
+      try {
+        await resetEvaluationsOnly();
+        loadDashboardData();
+        showNotice('🔄 ล้างข้อมูลคะแนนประเมินทั้งหมดในระบบเรียบร้อยแล้ว!');
+      } catch (err) {
+        console.error('Reset error:', err);
+        showNotice('เกิดข้อผิดพลาดในการเชื่อมต่อ Cloud แต่ข้อมูลในเครื่องถูกรีเซ็ตแล้ว');
+      } finally {
+        setIsResetting(false);
+      }
     }
   };
 
@@ -519,12 +528,21 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                 <button
                   type="button"
                   onClick={handleResetEvaluations}
+                  disabled={isResetting}
                   className="btn btn-danger"
-                  style={{ fontSize: '0.88rem', fontWeight: 600 }}
-                  title="รีเซ็ตคะแนนประเมินทั้งหมดในระบบกลับเป็นเริ่มต้นด้วยปุ่มเดียว"
+                  style={{
+                    fontSize: '0.88rem',
+                    fontWeight: 600,
+                    opacity: isResetting ? 0.7 : 1,
+                    cursor: isResetting ? 'wait' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  title="ล้างข้อมูลคะแนนประเมินทั้งหมดในระบบกลับเป็นเริ่มต้นด้วยปุ่มเดียว"
                 >
-                  <RotateCcw size={16} />
-                  รีเซ็ตคะแนนประเมิน (1-Click)
+                  <RotateCcw size={16} className={isResetting ? 'animate-spin' : ''} />
+                  {isResetting ? 'กำลังล้างคะแนนประเมิน...' : 'รีเซ็ตคะแนนประเมิน (1-Click)'}
                 </button>
 
                 <button
