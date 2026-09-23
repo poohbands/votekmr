@@ -1,7 +1,7 @@
 import { put } from '@vercel/blob';
 
 const BLOB_FILE_NAME = 'data.json';
-const BLOB_URL = 'https://fklthp2bxjcwbdac.public.blob.vercel-storage.com/data.json';
+const BLOB_URL = 'https://fklthp2bxjcwbdac.public.blob.vercel-storage.com/data.json?download=1';
 
 const DEFAULT_DATA = {
   customStaff: [],
@@ -12,6 +12,45 @@ const DEFAULT_DATA = {
   settings: { deadline: null, isLockedManually: false },
   assignments: {}
 };
+
+let inMemoryStore = null;
+
+async function loadLatestData() {
+  let blobData = null;
+  try {
+    const res = await fetch(`${BLOB_URL}&t=${Date.now()}`, { cache: 'no-store' });
+    if (res.ok) {
+      blobData = await res.json();
+    }
+  } catch (err) {
+    console.warn('Blob read warning:', err);
+  }
+
+  // Merge in-memory and blob data
+  const base = inMemoryStore ? { ...DEFAULT_DATA, ...blobData, ...inMemoryStore } : { ...DEFAULT_DATA, ...blobData };
+
+  // Re-merge arrays cleanly
+  if (blobData && inMemoryStore) {
+    const staffMap = new Map();
+    (blobData.customStaff || []).forEach(s => { if (s && s.id) staffMap.set(s.id, s); });
+    (inMemoryStore.customStaff || []).forEach(s => { if (s && s.id) staffMap.set(s.id, s); });
+    base.customStaff = Array.from(staffMap.values());
+
+    const masseuseMap = new Map();
+    (blobData.customMasseuses || []).forEach(m => { if (m && m.id) masseuseMap.set(m.id, m); });
+    (inMemoryStore.customMasseuses || []).forEach(m => { if (m && m.id) masseuseMap.set(m.id, m); });
+    base.customMasseuses = Array.from(masseuseMap.values());
+
+    base.staffOverrides = { ...(blobData.staffOverrides || {}), ...(inMemoryStore.staffOverrides || {}) };
+    base.masseuseOverrides = { ...(blobData.masseuseOverrides || {}), ...(inMemoryStore.masseuseOverrides || {}) };
+    base.evaluations = { ...(blobData.evaluations || {}), ...(inMemoryStore.evaluations || {}) };
+    base.settings = { ...(blobData.settings || {}), ...(inMemoryStore.settings || {}) };
+    base.assignments = { ...(blobData.assignments || {}), ...(inMemoryStore.assignments || {}) };
+  }
+
+  inMemoryStore = base;
+  return base;
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -29,31 +68,14 @@ export default async function handler(req, res) {
 
   // Handle read (GET)
   if (req.method === 'GET') {
-    try {
-      const response = await fetch(`${BLOB_URL}?t=${Date.now()}`, { cache: 'no-store' });
-      if (response.ok) {
-        const data = await response.json();
-        return res.status(200).json({ success: true, data: { ...DEFAULT_DATA, ...data } });
-      }
-    } catch (e) {
-      console.warn('Could not fetch from blob store:', e);
-    }
-    return res.status(200).json({ success: true, data: DEFAULT_DATA });
+    const current = await loadLatestData();
+    return res.status(200).json({ success: true, data: current });
   }
 
   // Handle write (POST / PUT)
   if (req.method === 'POST' || req.method === 'PUT') {
     try {
-      let currentData = { ...DEFAULT_DATA };
-      try {
-        const existingRes = await fetch(`${BLOB_URL}?t=${Date.now()}`, { cache: 'no-store' });
-        if (existingRes.ok) {
-          const fetched = await existingRes.json();
-          currentData = { ...currentData, ...fetched };
-        }
-      } catch (e) {
-        // Fallback to default
-      }
+      const currentData = await loadLatestData();
 
       const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       if (payload && typeof payload === 'object') {
@@ -96,6 +118,10 @@ export default async function handler(req, res) {
         }
         currentData.updatedAt = Date.now();
 
+        // Update in-memory store immediately
+        inMemoryStore = currentData;
+
+        // Persist to Vercel Blob store
         await put(BLOB_FILE_NAME, JSON.stringify(currentData), {
           access: 'public',
           addRandomSuffix: false,

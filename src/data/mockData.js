@@ -100,7 +100,7 @@ const STORAGE_KEYS = {
 };
 
 // --- Cloud Sync Realtime Serverless Integration ---
-const BLOB_FALLBACK_URL = 'https://fklthp2bxjcwbdac.public.blob.vercel-storage.com/data.json';
+const BLOB_FALLBACK_URL = 'https://fklthp2bxjcwbdac.public.blob.vercel-storage.com/data.json?download=1';
 
 function getCloudApiUrl() {
   if (typeof window !== 'undefined' && window.location && window.location.origin) {
@@ -134,7 +134,7 @@ export async function pullFromCloud() {
     // 2. Direct Blob Store Fallback if API was unavailable
     if (!data) {
       try {
-        const blobRes = await fetch(`${BLOB_FALLBACK_URL}?${cacheBuster}`, { cache: 'no-store' });
+        const blobRes = await fetch(`${BLOB_FALLBACK_URL}&${cacheBuster}`, { cache: 'no-store' });
         if (blobRes.ok) {
           data = await blobRes.json();
         }
