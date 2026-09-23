@@ -37,9 +37,11 @@ export default function EvaluationView({ currentUser }) {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     // Pull cloud first to get latest assignments + evaluations before rendering
     const initLoad = async () => {
       await pullFromCloud();
+      if (!isMounted) return;
       const loadedMasseuses = getMasseuses();
       const loadedAssign = getBehaviorAssignments();
       const loadedEvals = getEvaluations();
@@ -58,33 +60,45 @@ export default function EvaluationView({ currentUser }) {
       // Safely merge: never wipe existing evaluations with an empty/incomplete sync event
       const incoming = e?.detail;
       if (incoming && typeof incoming === 'object' && Object.keys(incoming).length > 0) {
-        // Merge incoming with current local to avoid losing scores
+        // Deep merge incoming with current state to avoid losing sub-scores (welcome/grooming)
         setEvaluations(prev => {
           const merged = { ...incoming };
-          // Ensure local user's evaluations are preserved if incoming is missing them
           Object.keys(prev).forEach(staffId => {
             if (!merged[staffId]) {
               merged[staffId] = prev[staffId];
             } else {
               const prevBeh = prev[staffId]?.behavior || {};
               const inBeh = merged[staffId]?.behavior || {};
-              const mergedBeh = { ...prevBeh, ...inBeh };
+              // Deep merge each masseuse's sub-scores
+              const mergedBeh = { ...prevBeh };
+              Object.keys(inBeh).forEach(mId => {
+                const prevScore = prevBeh[mId];
+                const inScore = inBeh[mId];
+                if (prevScore && inScore && typeof prevScore === 'object' && typeof inScore === 'object') {
+                  // Deep merge: combine welcome + grooming from both sides
+                  mergedBeh[mId] = { ...prevScore, ...inScore };
+                } else {
+                  mergedBeh[mId] = inScore ?? prevScore;
+                }
+              });
               merged[staffId] = { ...prev[staffId], ...merged[staffId], behavior: mergedBeh };
             }
           });
           return merged;
         });
       } else {
-        // No detail or empty — just re-read from localStorage (which has been updated)
+        // No detail or null (reset signal) — re-read from localStorage (which was already updated)
         setEvaluations(getEvaluations());
       }
-      // Also refresh assignments in case they changed
+      // Also refresh assignments and masseuses in case they changed on another device
       setAssignments(getBehaviorAssignments());
+      setMasseuses(getMasseuses());
     };
     window.addEventListener('evaluations_synced', handleSync);
     window.addEventListener('storage', handleSync);
 
     return () => {
+      isMounted = false;
       window.removeEventListener('evaluations_synced', handleSync);
       window.removeEventListener('storage', handleSync);
     };

@@ -301,10 +301,19 @@ export async function pullFromCloud() {
 
 let isPushing = false;
 let pendingPush = false;
+let pendingPushOptions = {};
 
 export async function pushToCloud(options = {}) {
   if (isPushing) {
     pendingPush = true;
+    // Merge options so critical flags (resetAll, isAssignmentUpdate) are preserved
+    pendingPushOptions = {
+      ...pendingPushOptions,
+      ...options,
+      resetEvaluations: (pendingPushOptions.resetEvaluations || options.resetEvaluations) || false,
+      resetAll: (pendingPushOptions.resetAll || options.resetAll) || false,
+      isAssignmentUpdate: (pendingPushOptions.isAssignmentUpdate || options.isAssignmentUpdate) || false,
+    };
     return false;
   }
   isPushing = true;
@@ -333,7 +342,9 @@ export async function pushToCloud(options = {}) {
     isPushing = false;
     if (pendingPush) {
       pendingPush = false;
-      return pushToCloud();
+      const queuedOptions = pendingPushOptions;
+      pendingPushOptions = {};
+      return pushToCloud(queuedOptions);
     }
     return res.ok;
   } catch (err) {
@@ -502,7 +513,11 @@ export function addStaffUser({ name, username, password, role, isBehaviorEvaluat
   localStorage.setItem(STORAGE_KEYS.STAFF_OVERRIDES, JSON.stringify(overrides));
 
   pushToCloud();
-  generateBehaviorAssignments();
+  // Only regenerate assignments if no evaluations exist yet (preserve shuffle lock rule)
+  if (!hasAnyEvaluations()) {
+    generateBehaviorAssignments();
+    pushToCloud({ isAssignmentUpdate: true });
+  }
   return getStaffUsers();
 }
 
@@ -519,7 +534,11 @@ export function updateStaffUser(id, updatedFields) {
   });
 
   saveStaffUsers(updatedList);
-  generateBehaviorAssignments();
+  // Only regenerate assignments if no evaluations exist yet
+  if (!hasAnyEvaluations()) {
+    generateBehaviorAssignments();
+    pushToCloud({ isAssignmentUpdate: true });
+  }
   return updatedList;
 }
 
@@ -532,7 +551,11 @@ export function deleteStaffUser(id) {
   localStorage.setItem(STORAGE_KEYS.CUSTOM_STAFF, JSON.stringify(currentCustom));
 
   pushToCloud();
-  generateBehaviorAssignments();
+  // Only regenerate assignments if no evaluations exist yet (preserve shuffle lock rule)
+  if (!hasAnyEvaluations()) {
+    generateBehaviorAssignments();
+    pushToCloud({ isAssignmentUpdate: true });
+  }
   return getStaffUsers();
 }
 
@@ -595,7 +618,11 @@ export function addMasseuse(name, code) {
   localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify(overrides));
 
   pushToCloud();
-  generateBehaviorAssignments();
+  // Only regenerate assignments if no evaluations exist yet (preserve shuffle lock rule)
+  if (!hasAnyEvaluations()) {
+    generateBehaviorAssignments();
+    pushToCloud({ isAssignmentUpdate: true });
+  }
   return getMasseuses();
 }
 
@@ -620,7 +647,11 @@ export function deleteMasseuse(id) {
   localStorage.setItem(STORAGE_KEYS.CUSTOM_MASSEUSES, JSON.stringify(currentCustom));
 
   pushToCloud();
-  generateBehaviorAssignments();
+  // Only regenerate assignments if no evaluations exist yet (preserve shuffle lock rule)
+  if (!hasAnyEvaluations()) {
+    generateBehaviorAssignments();
+    pushToCloud({ isAssignmentUpdate: true });
+  }
   return getMasseuses();
 }
 
@@ -663,7 +694,8 @@ export function importMasseuses(newList, mode = 'append') {
     localStorage.setItem(STORAGE_KEYS.EVALUATIONS_RESET_AT, resetTime.toString());
 
     generateBehaviorAssignments();
-    pushToCloud({ resetEvaluations: true, evaluationsResetAt: resetTime });
+    // replace mode always resets evaluations so assignment update is safe
+    pushToCloud({ resetEvaluations: true, evaluationsResetAt: resetTime, isAssignmentUpdate: true });
     return getMasseuses();
   } else {
     // Mode: append
@@ -690,8 +722,13 @@ export function importMasseuses(newList, mode = 'append') {
     localStorage.setItem(STORAGE_KEYS.CUSTOM_MASSEUSES, JSON.stringify(updatedCustom));
     localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify(overrides));
 
-    generateBehaviorAssignments();
-    pushToCloud();
+    // Only regenerate assignments if no evaluations exist yet (preserve shuffle lock rule)
+    if (!hasAnyEvaluations()) {
+      generateBehaviorAssignments();
+      pushToCloud({ isAssignmentUpdate: true });
+    } else {
+      pushToCloud();
+    }
     return getMasseuses();
   }
 }
@@ -762,7 +799,7 @@ export function getBehaviorAssignments() {
   if (stored) {
     try {
       const parsed = JSON.parse(stored);
-      if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.keys(parsed).length > 0) {
         // Validate that assignments are strictly disjoint with zero overlap
         const seen = new Set();
         let hasOverlap = false;

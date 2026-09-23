@@ -10,7 +10,6 @@ import {
   deleteMasseuse,
   calculateResults,
   seedMockEvaluations,
-  resetAllData,
   resetEvaluationsOnly,
   generateBehaviorAssignments,
   getBehaviorAssignments,
