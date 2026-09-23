@@ -32,11 +32,8 @@ export default function EvaluationView({ currentUser }) {
   const [toastMessage, setToastMessage] = useState('');
   const [systemSettings, setSystemSettings] = useState({});
   const [isClosed, setIsClosed] = useState(false);
-  const [savingCardId, setSavingCardId] = useState(null);
-  const [savedCardIds, setSavedCardIds] = useState(new Set());
   const [isGlobalSaving, setIsGlobalSaving] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
-
 
   useEffect(() => {
     const loadedMasseuses = getMasseuses();
@@ -67,7 +64,6 @@ export default function EvaluationView({ currentUser }) {
     };
   }, [currentUser]);
 
-
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 3000);
@@ -82,32 +78,10 @@ export default function EvaluationView({ currentUser }) {
     try {
       const updated = saveBehaviorSubScore(currentUser.id, masseuseId, subKey, score);
       setEvaluations({ ...updated });
-      setSavedCardIds(prev => {
-        const next = new Set(prev);
-        next.delete(masseuseId);
-        return next;
-      });
-      showToast(`เลือกคะแนน ${score} คะแนนเรียบร้อย`);
+      showToast(`เลือกลงคะแนน ${score} คะแนนเรียบร้อย`);
       checkCompletion(updated);
     } catch (err) {
       alert(err.message);
-    }
-  };
-
-  const handleSaveCard = async (m) => {
-    if (isClosed && currentUser.role !== 'admin') {
-      alert('ระบบปิดรับการประเมินแล้ว ไม่สามารถบันทึกหรือเปลี่ยนคะแนนได้');
-      return;
-    }
-    setSavingCardId(m.id);
-    try {
-      await pushToCloud();
-      setSavedCardIds(prev => new Set([...prev, m.id]));
-      showToast(`บันทึกข้อมูลของ ${m.name} เรียบร้อยแล้ว`);
-    } catch (err) {
-      alert(`บันทึกไม่สำเร็จ: ${err.message}`);
-    } finally {
-      setSavingCardId(null);
     }
   };
 
@@ -119,18 +93,16 @@ export default function EvaluationView({ currentUser }) {
     setIsGlobalSaving(true);
     try {
       await pushToCloud();
-      setSavedCardIds(new Set(assignedMasseuses.map(m => m.id)));
       showToast('บันทึกข้อมูลการประเมินทั้งหมดเรียบร้อยแล้ว');
-      if (completedCount === totalToEvaluate && totalToEvaluate > 0) {
-        confetti({ particleCount: 140, spread: 80, origin: { y: 0.6 } });
-        setIsSuccessModalOpen(true);
-      }
+      confetti({ particleCount: 140, spread: 80, origin: { y: 0.6 } });
+      setIsSuccessModalOpen(true);
     } catch (err) {
       alert(`บันทึกไม่สำเร็จ: ${err.message}`);
     } finally {
       setIsGlobalSaving(false);
     }
   };
+
 
 
   const checkCompletion = (currentEvals) => {
@@ -571,63 +543,29 @@ export default function EvaluationView({ currentUser }) {
                 </div>
               </div>
 
-              {/* Card Footer: Save Button & Rating Summary */}
+              {/* Card Footer: Rating Summary */}
               <div style={{
-                marginTop: '18px',
-                paddingTop: '14px',
+                marginTop: '16px',
+                paddingTop: '12px',
                 borderTop: '1px solid var(--border-color)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '10px'
+                fontSize: '0.85rem'
               }}>
-                <div style={{ fontSize: '0.84rem' }}>
-                  {isFullyRated ? (
-                    <span style={{ color: '#2dd4bf', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-                      <CheckCircle2 size={16} /> ประเมินครบ 2 ข้อ (เฉลี่ย {avgScore} คะแนน)
-                    </span>
-                  ) : (hasWelcome || hasGrooming) ? (
-                    <span style={{ color: '#f59e0b', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <AlertCircle size={14} /> ยังค้างอีก 1 ข้อที่ยังไม่ได้ลงคะแนน
-                    </span>
-                  ) : (
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                      กรุณากดเลือกคะแนน 2.1 และ 2.2
-                    </span>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  disabled={(!hasWelcome && !hasGrooming) || (isClosed && currentUser.role !== 'admin') || savingCardId === m.id}
-                  onClick={() => handleSaveCard(m)}
-                  className={`btn ${isFullyRated ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{
-                    padding: '8px 18px',
-                    fontSize: '0.84rem',
-                    fontWeight: 600,
-                    borderRadius: 'var(--radius-md)',
-                    background: isFullyRated ? 'linear-gradient(135deg, #14b8a6, #0d9488)' : undefined,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    cursor: (!hasWelcome && !hasGrooming) || (isClosed && currentUser.role !== 'admin') ? 'not-allowed' : 'pointer',
-                    opacity: (!hasWelcome && !hasGrooming) ? 0.6 : 1
-                  }}
-                >
-                  {savingCardId === m.id ? (
-                    <span>กำลังบันทึก...</span>
-                  ) : savedCardIds.has(m.id) ? (
-                    <>
-                      <Check size={16} /> บันทึกเรียบร้อย
-                    </>
-                  ) : (
-                    <>
-                      <Save size={16} /> บันทึกข้อมูล
-                    </>
-                  )}
-                </button>
+                {isFullyRated ? (
+                  <span style={{ color: '#2dd4bf', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                    <CheckCircle2 size={16} /> ประเมินครบ 2 ข้อแล้ว (เฉลี่ย {avgScore} คะแนน)
+                  </span>
+                ) : (hasWelcome || hasGrooming) ? (
+                  <span style={{ color: '#f59e0b', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <AlertCircle size={14} /> ยังค้างอีก 1 ข้อที่ยังไม่ได้ลงคะแนน
+                  </span>
+                ) : (
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                    รอการลงคะแนน (กดเลือกคะแนน 1 - 10)
+                  </span>
+                )}
               </div>
 
             </div>
@@ -641,102 +579,102 @@ export default function EvaluationView({ currentUser }) {
         </div>
       )}
 
-      {/* Bottom Global Save Section (เมื่อประเมินเสร็จ หรือต้องการบันทึกความคืบหน้า) */}
+      {/* ONE LARGE MAIN SAVE BUTTON SECTION (ปุ่มหลักขนาดใหญ่ด้านล่างปุ่มเดียว) */}
       {totalToEvaluate > 0 && (
         <div className="glass-panel animate-fade-in" style={{
-          marginTop: '28px',
-          padding: '24px 28px',
-          borderRadius: '20px',
+          marginTop: '32px',
+          padding: '24px 32px',
+          borderRadius: '24px',
           background: completedCount === totalToEvaluate && totalToEvaluate > 0
-            ? 'linear-gradient(135deg, rgba(20, 184, 166, 0.18), rgba(139, 92, 246, 0.18))'
-            : 'rgba(255, 255, 255, 0.03)',
+            ? 'linear-gradient(135deg, rgba(20, 184, 166, 0.22), rgba(139, 92, 246, 0.22))'
+            : 'rgba(255, 255, 255, 0.04)',
           border: completedCount === totalToEvaluate && totalToEvaluate > 0
-            ? '2px solid rgba(20, 184, 166, 0.5)'
+            ? '2px solid rgba(20, 184, 166, 0.6)'
             : '1px solid var(--border-color)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '16px',
+          gap: '20px',
           boxShadow: completedCount === totalToEvaluate && totalToEvaluate > 0
-            ? '0 12px 36px rgba(20, 184, 166, 0.2)'
-            : 'none'
+            ? '0 16px 40px rgba(20, 184, 166, 0.25)'
+            : '0 8px 24px rgba(0,0,0,0.2)'
         }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
               {completedCount === totalToEvaluate && totalToEvaluate > 0 ? (
                 <div style={{
-                  background: 'rgba(20, 184, 166, 0.2)',
+                  background: 'rgba(20, 184, 166, 0.25)',
                   color: '#2dd4bf',
-                  padding: '6px',
+                  padding: '8px',
                   borderRadius: '50%',
                   display: 'flex'
                 }}>
-                  <CheckCircle2 size={24} />
+                  <CheckCircle2 size={26} />
                 </div>
               ) : (
                 <div style={{
-                  background: 'rgba(245, 158, 11, 0.2)',
+                  background: 'rgba(245, 158, 11, 0.25)',
                   color: '#f59e0b',
-                  padding: '6px',
+                  padding: '8px',
                   borderRadius: '50%',
                   display: 'flex'
                 }}>
-                  <Clock size={24} />
+                  <Clock size={26} />
                 </div>
               )}
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
-                {completedCount === totalToEvaluate && totalToEvaluate > 0
-                  ? '🎉 ประเมินหมอนวดครบทั้งกลุ่มแล้ว!'
-                  : `สรุปความคืบหน้าการประเมิน (${completedCount} / ${totalToEvaluate} คน)`
-                }
-              </h3>
+              <div>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0 }}>
+                  {completedCount === totalToEvaluate && totalToEvaluate > 0
+                    ? '🎉 ประเมินหมอนวดครบทั้งกลุ่มแล้ว!'
+                    : `สถานะการประเมิน: ประเมินแล้ว ${completedCount} จาก ${totalToEvaluate} คน`
+                  }
+                </h3>
+                <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  {completedCount === totalToEvaluate && totalToEvaluate > 0
+                    ? 'กรุณากดปุ่มด้านขวาเพื่อบันทึกข้อมูลการประเมินทั้งหมดเข้าสู่ระบบ Cloud'
+                    : `สามารถกดปุ่มนี้เพื่อบันทึกข้อมูลที่ประเมินแล้วทั้งหมดได้ทันที`
+                  }
+                </div>
+              </div>
             </div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', margin: 0 }}>
-              {completedCount === totalToEvaluate && totalToEvaluate > 0
-                ? 'คุณได้ประเมินหมอนวดครบทุกท่านเรียบร้อยแล้ว กดปุ่มด้านขวาเพื่อบันทึกและส่งข้อมูลผลการประเมินขึ้นระบบคลาวด์'
-                : `ประเมินครบแล้ว ${completedCount} คน (ยังเหลืออีก ${totalToEvaluate - completedCount} คน) สามารถกดบันทึกข้อมูลเพื่ออัปเดตระบบได้ตลอดเวลา`
-              }
-            </p>
           </div>
 
           <button
             type="button"
-            disabled={completedCount === 0 || (isClosed && currentUser.role !== 'admin') || isGlobalSaving}
+            disabled={((completedCount === 0 && Object.keys(userBehaviorEvals).length === 0) || (isClosed && currentUser.role !== 'admin') || isGlobalSaving)}
             onClick={handleSaveAll}
             className="btn btn-primary"
             style={{
-              padding: '14px 28px',
-              fontSize: '1rem',
-              fontWeight: 700,
-              borderRadius: '12px',
+              padding: '16px 36px',
+              fontSize: '1.15rem',
+              fontWeight: 800,
+              borderRadius: '16px',
               background: completedCount === totalToEvaluate && totalToEvaluate > 0
                 ? 'linear-gradient(135deg, #10b981, #059669)'
                 : 'linear-gradient(135deg, #14b8a6, #8b5cf6)',
               boxShadow: completedCount === totalToEvaluate && totalToEvaluate > 0
-                ? '0 8px 24px rgba(16, 185, 129, 0.4)'
-                : '0 4px 16px rgba(20, 184, 166, 0.3)',
-              display: 'flex',
+                ? '0 10px 30px rgba(16, 185, 129, 0.5)'
+                : '0 8px 25px rgba(20, 184, 166, 0.4)',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '10px',
-              cursor: completedCount === 0 || (isClosed && currentUser.role !== 'admin') ? 'not-allowed' : 'pointer',
-              opacity: completedCount === 0 ? 0.6 : 1
+              gap: '12px',
+              cursor: ((completedCount === 0 && Object.keys(userBehaviorEvals).length === 0) || (isClosed && currentUser.role !== 'admin') || isGlobalSaving) ? 'not-allowed' : 'pointer',
+              letterSpacing: '0.2px'
             }}
           >
             {isGlobalSaving ? (
-              <span>กำลังบันทึกข้อมูลเข้าระบบ...</span>
+              <span>กำลังบันทึกข้อมูลทั้งหมด...</span>
             ) : (
               <>
-                <Save size={20} />
-                {completedCount === totalToEvaluate && totalToEvaluate > 0
-                  ? 'บันทึกข้อมูลการประเมินทั้งหมด (เสร็จสิ้น)'
-                  : `บันทึกข้อมูลการประเมิน (${completedCount}/${totalToEvaluate} คน)`
-                }
+                <Save size={24} />
+                <span>บันทึกข้อมูลการประเมินทั้งหมด</span>
               </>
             )}
           </button>
         </div>
       )}
+
 
       {/* Modal ยืนยันการบันทึกข้อมูลสำเร็จ */}
       {isSuccessModalOpen && (
