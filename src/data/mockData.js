@@ -665,9 +665,11 @@ export function importMasseuses(newList, mode = 'append') {
     localStorage.setItem(STORAGE_KEYS.CUSTOM_MASSEUSES, JSON.stringify(customList));
     localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify(overrides));
     localStorage.removeItem(STORAGE_KEYS.EVALUATIONS);
+    const resetTime = Date.now();
+    localStorage.setItem(STORAGE_KEYS.EVALUATIONS_RESET_AT, resetTime.toString());
 
     generateBehaviorAssignments();
-    pushToCloud();
+    pushToCloud({ resetEvaluations: true, evaluationsResetAt: resetTime });
     return getMasseuses();
   } else {
     // Mode: append
@@ -761,6 +763,34 @@ export function getEvaluations() {
     }
   }
   return {};
+}
+
+// Check whether any evaluations have already been started/given
+export function hasAnyEvaluations() {
+  const allEvals = getEvaluations();
+  if (!allEvals || typeof allEvals !== 'object') return false;
+
+  for (const staffId of Object.keys(allEvals)) {
+    const staffEvals = allEvals[staffId];
+    if (!staffEvals) continue;
+    const beh = staffEvals.behavior;
+    if (beh && typeof beh === 'object') {
+      for (const mId of Object.keys(beh)) {
+        const val = beh[mId];
+        if (val !== null && val !== undefined) {
+          if (typeof val === 'number') return true;
+          if (typeof val === 'object' && (val.welcome !== undefined || val.grooming !== undefined)) {
+            return true;
+          }
+        }
+      }
+    }
+    const resp = staffEvals.responsibility;
+    if (resp && typeof resp === 'object' && Object.keys(resp).length > 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function saveBehaviorSubScore(staffId, masseuseId, subKey, score) {

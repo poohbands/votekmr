@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   getStaffUsers,
   addStaffUser,
@@ -16,7 +16,8 @@ import {
   getBehaviorAssignments,
   getSystemSettings,
   saveSystemSettings,
-  getStaffProgressReport
+  getStaffProgressReport,
+  hasAnyEvaluations
 } from '../data/mockData';
 import {
   Trophy,
@@ -125,6 +126,17 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
     setInputIsMaintenance(Boolean(loadedSettings.isMaintenanceMode));
     setInputMaintenanceMessage(loadedSettings.maintenanceMessage || 'ระบบกำลังปิดปรับปรุงชั่วคราว เพื่อบำรุงรักษาระบบและอัปเดตข้อมูล');
   };
+
+  const hasEvaluationsStarted = useMemo(() => {
+    const hasScoresInResults = results.some(item =>
+      item.welcomeScore !== null ||
+      item.groomingScore !== null ||
+      item.totalScore !== null ||
+      item.behaviorScore !== null
+    );
+    if (hasScoresInResults) return true;
+    return hasAnyEvaluations();
+  }, [results]);
 
   useEffect(() => {
     if (hasDashboardAccess) {
@@ -289,6 +301,10 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
   };
 
   const handleReRandomize = () => {
+    if (hasEvaluationsStarted) {
+      alert('⚠️ ไม่สามารถสุ่มจัดกลุ่มใหม่ได้ เนื่องจากมีการเริ่มประเมินคะแนนในระบบแล้ว หากต้องการสุ่มกลุ่มใหม่ กรุณารีเซ็ตคะแนนประเมินก่อน');
+      return;
+    }
     if (window.confirm('คุณต้องการสุ่มจับคู่ประเมินพฤติกรรมใหม่ใช่หรือไม่?')) {
       generateBehaviorAssignments();
       loadDashboardData();
@@ -581,9 +597,40 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                   เติมข้อมูลตัวอย่าง (Demo)
                 </button>
 
-                <button type="button" onClick={handleReRandomize} className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>
+                <button
+                  type="button"
+                  onClick={handleReRandomize}
+                  disabled={hasEvaluationsStarted}
+                  className="btn btn-secondary"
+                  style={{
+                    fontSize: '0.85rem',
+                    opacity: hasEvaluationsStarted ? 0.45 : 1,
+                    cursor: hasEvaluationsStarted ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  title={
+                    hasEvaluationsStarted
+                      ? 'ไม่สามารถสุ่มจัดกลุ่มใหม่ได้ เนื่องจากเริ่มมีการประเมินคะแนนแล้ว (ต้องกดรีเซ็ตคะแนนประเมินก่อน)'
+                      : 'สุ่มจัดกลุ่มหมอนวดใหม่ (กลุ่มละ 5 คน)'
+                  }
+                >
                   <RefreshCw size={16} />
                   สุ่มจัดกลุ่มหมอนวดใหม่ (กลุ่มละ 5 คน)
+                  {hasEvaluationsStarted && (
+                    <span style={{
+                      fontSize: '0.72rem',
+                      background: 'rgba(239, 68, 68, 0.25)',
+                      color: '#f87171',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      marginLeft: '2px',
+                      fontWeight: 700
+                    }}>
+                      ล็อกแล้ว
+                    </span>
+                  )}
                 </button>
               </>
             )}
