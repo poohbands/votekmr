@@ -49,11 +49,12 @@ export const INITIAL_STAFF_USERS = [
     id: 'wann',
     name: 'พี่วรรณ',
     role: 'staff',
-    username: 'wann',
+    username: 'wan',
+    aliases: ['wann'],
     password: 'password123',
     isBehaviorEvaluator: false,
-    canViewDashboard: false,
-    title: 'เจ้าหน้าที่ (ผู้ประเมินความรับผิดชอบ)',
+    canViewDashboard: true,
+    title: 'เจ้าหน้าที่ (ดู Dashboard ได้)',
     avatarColor: 'from-sky-500 to-blue-600'
   },
   {
@@ -99,6 +100,8 @@ const STORAGE_KEYS = {
 };
 
 // --- Cloud Sync Realtime Serverless Integration ---
+const BLOB_FALLBACK_URL = 'https://fklthp2bxjcwbdac.public.blob.vercel-storage.com/data.json';
+
 function getCloudApiUrl() {
   if (typeof window !== 'undefined' && window.location && window.location.origin) {
     return `${window.location.origin}/api/sync`;
@@ -112,26 +115,63 @@ export async function pullFromCloud() {
   if (isPullingCloud) return false;
   isPullingCloud = true;
   try {
-    const res = await fetch(getCloudApiUrl());
-    if (!res.ok) throw new Error('Cloud fetch error');
-    const result = await res.json();
-    const data = result.data;
+    let data = null;
+    const cacheBuster = `t=${Date.now()}`;
+
+    // 1. Try Vercel Serverless Function
+    try {
+      const res = await fetch(`${getCloudApiUrl()}?${cacheBuster}`, { cache: 'no-store' });
+      if (res.ok) {
+        const result = await res.json();
+        if (result && result.data) {
+          data = result.data;
+        }
+      }
+    } catch (e) {
+      console.warn('API sync endpoint notice:', e);
+    }
+
+    // 2. Direct Blob Store Fallback if API was unavailable
+    if (!data) {
+      try {
+        const blobRes = await fetch(`${BLOB_FALLBACK_URL}?${cacheBuster}`, { cache: 'no-store' });
+        if (blobRes.ok) {
+          data = await blobRes.json();
+        }
+      } catch (be) {
+        console.warn('Blob fallback notice:', be);
+      }
+    }
 
     if (data) {
+      // Smart union merge for custom staff so local staff is never lost
       if (Array.isArray(data.customStaff)) {
-        localStorage.setItem(STORAGE_KEYS.CUSTOM_STAFF, JSON.stringify(data.customStaff));
+        const localCustom = getCustomStaff();
+        const staffMap = new Map();
+        localCustom.forEach(s => { if (s && s.id) staffMap.set(s.id, s); });
+        data.customStaff.forEach(s => { if (s && s.id) staffMap.set(s.id, s); });
+        const mergedCustom = Array.from(staffMap.values());
+        localStorage.setItem(STORAGE_KEYS.CUSTOM_STAFF, JSON.stringify(mergedCustom));
       }
       if (data.staffOverrides && typeof data.staffOverrides === 'object') {
-        localStorage.setItem(STORAGE_KEYS.STAFF_OVERRIDES, JSON.stringify(data.staffOverrides));
+        const localOverrides = getStaffOverrides();
+        const mergedOverrides = { ...localOverrides, ...data.staffOverrides };
+        localStorage.setItem(STORAGE_KEYS.STAFF_OVERRIDES, JSON.stringify(mergedOverrides));
       }
       if (Array.isArray(data.customMasseuses)) {
-        localStorage.setItem(STORAGE_KEYS.CUSTOM_MASSEUSES, JSON.stringify(data.customMasseuses));
+        const localMasseuses = getCustomMasseuses();
+        const mmap = new Map();
+        localMasseuses.forEach(m => { if (m && m.id) mmap.set(m.id, m); });
+        data.customMasseuses.forEach(m => { if (m && m.id) mmap.set(m.id, m); });
+        localStorage.setItem(STORAGE_KEYS.CUSTOM_MASSEUSES, JSON.stringify(Array.from(mmap.values())));
       }
       if (data.masseuseOverrides && typeof data.masseuseOverrides === 'object') {
-        localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify(data.masseuseOverrides));
+        const localMasseuseOverrides = getMasseuseOverrides();
+        localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify({ ...localMasseuseOverrides, ...data.masseuseOverrides }));
       }
       if (data.evaluations && typeof data.evaluations === 'object') {
-        localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(data.evaluations));
+        const localEvals = getEvaluations();
+        localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify({ ...localEvals, ...data.evaluations }));
       }
       if (data.settings && typeof data.settings === 'object') {
         localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(data.settings));
@@ -139,14 +179,14 @@ export async function pullFromCloud() {
       if (data.assignments && typeof data.assignments === 'object') {
         localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(data.assignments));
       }
+      isPullingCloud = false;
+      return true;
     }
-    isPullingCloud = false;
-    return true;
   } catch (err) {
     console.warn('Cloud pull warning:', err);
-    isPullingCloud = false;
-    return false;
   }
+  isPullingCloud = false;
+  return false;
 }
 
 export async function pushToCloud() {
@@ -160,13 +200,15 @@ export async function pushToCloud() {
       settings: getSystemSettings(),
       assignments: getBehaviorAssignments()
     };
-    await fetch(getCloudApiUrl(), {
+    const res = await fetch(getCloudApiUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    return res.ok;
   } catch (err) {
     console.warn('Cloud push warning:', err);
+    return false;
   }
 }
 
@@ -327,17 +369,12 @@ export function updateStaffUser(id, updatedFields) {
 }
 
 export function deleteStaffUser(id) {
-  const allStaff = getStaffUsers();
-  const initialIds = new Set(INITIAL_STAFF_USERS.map(s => s.id));
+  const overrides = getStaffOverrides();
+  overrides[id] = { ...(overrides[id] || {}), isDeleted: true };
+  localStorage.setItem(STORAGE_KEYS.STAFF_OVERRIDES, JSON.stringify(overrides));
 
-  if (initialIds.has(id)) {
-    const overrides = getStaffOverrides();
-    overrides[id] = { ...overrides[id], isDeleted: true };
-    localStorage.setItem(STORAGE_KEYS.STAFF_OVERRIDES, JSON.stringify(overrides));
-  } else {
-    const currentCustom = getCustomStaff().filter(s => s.id !== id);
-    localStorage.setItem(STORAGE_KEYS.CUSTOM_STAFF, JSON.stringify(currentCustom));
-  }
+  const currentCustom = getCustomStaff().filter(s => s.id !== id);
+  localStorage.setItem(STORAGE_KEYS.CUSTOM_STAFF, JSON.stringify(currentCustom));
 
   pushToCloud();
   generateBehaviorAssignments();
@@ -420,16 +457,12 @@ export function updateMasseuse(id, newName, newCode) {
 }
 
 export function deleteMasseuse(id) {
-  const initialIds = new Set(INITIAL_MASSEUSES.map(m => m.id));
+  const overrides = getMasseuseOverrides();
+  overrides[id] = { ...(overrides[id] || {}), isDeleted: true };
+  localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify(overrides));
 
-  if (initialIds.has(id)) {
-    const overrides = getMasseuseOverrides();
-    overrides[id] = { ...overrides[id], isDeleted: true };
-    localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify(overrides));
-  } else {
-    const currentCustom = getCustomMasseuses().filter(m => m.id !== id);
-    localStorage.setItem(STORAGE_KEYS.CUSTOM_MASSEUSES, JSON.stringify(currentCustom));
-  }
+  const currentCustom = getCustomMasseuses().filter(m => m.id !== id);
+  localStorage.setItem(STORAGE_KEYS.CUSTOM_MASSEUSES, JSON.stringify(currentCustom));
 
   pushToCloud();
   generateBehaviorAssignments();

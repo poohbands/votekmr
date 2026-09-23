@@ -26,9 +26,15 @@ export default function LoginModal({ onLogin }) {
     setIsLoading(false);
 
     const currentStaffList = getStaffUsers();
-    const foundUser = currentStaffList.find(
-      u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password
-    );
+    const inputUser = username.trim().toLowerCase();
+    const inputPass = password.trim();
+
+    const foundUser = currentStaffList.find(u => {
+      const matchUsername = u.username.toLowerCase() === inputUser || 
+                            (Array.isArray(u.aliases) && u.aliases.some(a => a.toLowerCase() === inputUser));
+      const matchPass = u.password === password || u.password === inputPass;
+      return matchUsername && matchPass;
+    });
 
     if (foundUser) {
       onLogin(foundUser);
