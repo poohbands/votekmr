@@ -1,5 +1,20 @@
 // Data Model and Storage Utilities for Masseuse Evaluation System
 
+export const BEHAVIOR_SUB_CRITERIA = [
+  {
+    key: 'welcome',
+    code: '2.1',
+    title: 'การต้อนรับ ดูแลผู้มารับบริการ ตั้งแต่เริ่ม จบเสร็จสิ้นบริการ',
+    description: 'การทักทาย ไหว้ ยิ้มแย้ม การเอาใจใส่สอบถามความต้องการ และการดูแลตลอดจนเสร็จสิ้นบริการ'
+  },
+  {
+    key: 'grooming',
+    code: '2.2',
+    title: 'การแต่งกาย สุภาพเรียบร้อย เหมาะสม',
+    description: 'ความสะอาดของชุดยูนิฟอร์ม ทรงผม ความเรียบร้อย ถูกสุขอนามัย และความเหมาะสม'
+  }
+];
+
 export const INITIAL_STAFF_USERS = [
   {
     id: 'pop',
@@ -7,9 +22,9 @@ export const INITIAL_STAFF_USERS = [
     role: 'admin',
     username: 'admin',
     password: 'sakura4923',
-    isBehaviorEvaluator: false,
+    isBehaviorEvaluator: true,
     canViewDashboard: true,
-    title: 'เจ้าหน้าที่ (Admin / ผู้ดูแลระบบ)',
+    title: 'เจ้าหน้าที่ (Admin / ผู้ประเมินพฤติกรรม)',
     avatarColor: 'from-amber-500 to-red-500'
   },
   {
@@ -20,7 +35,7 @@ export const INITIAL_STAFF_USERS = [
     password: 'password123',
     isBehaviorEvaluator: true,
     canViewDashboard: false,
-    title: 'เจ้าหน้าที่ (ผู้ประเมินพฤติกรรม & ความรับผิดชอบ)',
+    title: 'เจ้าหน้าที่ (ผู้ประเมินพฤติกรรม)',
     avatarColor: 'from-blue-500 to-indigo-600'
   },
   {
@@ -31,7 +46,7 @@ export const INITIAL_STAFF_USERS = [
     password: 'password123',
     isBehaviorEvaluator: true,
     canViewDashboard: false,
-    title: 'เจ้าหน้าที่ (ผู้ประเมินพฤติกรรม & ความรับผิดชอบ)',
+    title: 'เจ้าหน้าที่ (ผู้ประเมินพฤติกรรม)',
     avatarColor: 'from-emerald-500 to-teal-700'
   },
   {
@@ -42,7 +57,7 @@ export const INITIAL_STAFF_USERS = [
     password: 'password123',
     isBehaviorEvaluator: true,
     canViewDashboard: false,
-    title: 'เจ้าหน้าที่ (ผู้ประเมินพฤติกรรม & ความรับผิดชอบ)',
+    title: 'เจ้าหน้าที่ (ผู้ประเมินพฤติกรรม)',
     avatarColor: 'from-purple-500 to-pink-600'
   },
   {
@@ -52,9 +67,9 @@ export const INITIAL_STAFF_USERS = [
     username: 'wan',
     aliases: ['wann'],
     password: 'password123',
-    isBehaviorEvaluator: false,
+    isBehaviorEvaluator: true,
     canViewDashboard: true,
-    title: 'เจ้าหน้าที่ (ดู Dashboard ได้)',
+    title: 'เจ้าหน้าที่ (ผู้ประเมินพฤติกรรม / ดู Dashboard ได้)',
     avatarColor: 'from-sky-500 to-blue-600'
   },
   {
@@ -63,9 +78,9 @@ export const INITIAL_STAFF_USERS = [
     role: 'staff',
     username: 'miew',
     password: 'password123',
-    isBehaviorEvaluator: false,
+    isBehaviorEvaluator: true,
     canViewDashboard: false,
-    title: 'เจ้าหน้าที่ (ผู้ประเมินความรับผิดชอบ)',
+    title: 'เจ้าหน้าที่ (ผู้ประเมินพฤติกรรม)',
     avatarColor: 'from-rose-500 to-orange-500'
   }
 ];
@@ -252,15 +267,28 @@ export function getSystemSettings() {
   const stored = localStorage.getItem(STORAGE_KEYS.SETTINGS);
   if (stored) {
     try {
-      return JSON.parse(stored);
+      const parsed = JSON.parse(stored);
+      return {
+        deadline: parsed.deadline ?? null,
+        isLockedManually: Boolean(parsed.isLockedManually),
+        isMaintenanceMode: Boolean(parsed.isMaintenanceMode),
+        maintenanceMessage: parsed.maintenanceMessage || 'ระบบกำลังปิดปรับปรุงชั่วคราว เพื่อบำรุงรักษาระบบและอัปเดตข้อมูล'
+      };
     } catch (e) {
       console.error('Failed to parse settings:', e);
     }
   }
   return {
     deadline: null,
-    isLockedManually: false
+    isLockedManually: false,
+    isMaintenanceMode: false,
+    maintenanceMessage: 'ระบบกำลังปิดปรับปรุงชั่วคราว เพื่อบำรุงรักษาระบบและอัปเดตข้อมูล'
   };
+}
+
+export function isMaintenanceActive() {
+  const settings = getSystemSettings();
+  return Boolean(settings.isMaintenanceMode);
 }
 
 export function saveSystemSettings(settings) {
@@ -269,6 +297,16 @@ export function saveSystemSettings(settings) {
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
   pushToCloud();
   return updated;
+}
+
+export function setMaintenanceMode(isMaintenance, message) {
+  const current = getSystemSettings();
+  const updated = {
+    ...current,
+    isMaintenanceMode: Boolean(isMaintenance),
+    maintenanceMessage: message || current.maintenanceMessage
+  };
+  return saveSystemSettings(updated);
 }
 
 export function isEvaluationClosed() {
@@ -493,11 +531,12 @@ export function generateBehaviorAssignments() {
     return assignments;
   }
 
-  const groupSize = Math.ceil(shuffled.length / behaviorEvaluators.length);
+  // Divide into groups of 5 masseuses per evaluator (e.g. 30 masseuses / 6 evaluators = 5 each)
+  const groupSize = Math.max(1, Math.floor(shuffled.length / behaviorEvaluators.length));
 
   behaviorEvaluators.forEach((evaluator, index) => {
     const start = index * groupSize;
-    const end = start + groupSize;
+    const end = index === behaviorEvaluators.length - 1 ? shuffled.length : start + groupSize;
     assignments[evaluator.id] = shuffled.slice(start, end);
   });
 
@@ -507,7 +546,7 @@ export function generateBehaviorAssignments() {
 }
 
 export function getBehaviorAssignments() {
-  const stored = localStorage.setItem ? localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS) : null;
+  const stored = localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS);
   if (stored) {
     try {
       return JSON.parse(stored);
@@ -528,6 +567,32 @@ export function getEvaluations() {
     }
   }
   return {};
+}
+
+export function saveBehaviorSubScore(staffId, masseuseId, subKey, score) {
+  if (isEvaluationClosed()) {
+    throw new Error('ระบบปิดรับการประเมินแล้ว ไม่สามารถบันทึกคะแนนเพิ่มเติมได้');
+  }
+  const allEvals = getEvaluations();
+  if (!allEvals[staffId]) {
+    allEvals[staffId] = { behavior: {}, responsibility: {} };
+  }
+  if (!allEvals[staffId].behavior) {
+    allEvals[staffId].behavior = {};
+  }
+  const current = allEvals[staffId].behavior[masseuseId];
+  let subObj = {};
+  if (typeof current === 'object' && current !== null) {
+    subObj = { ...current };
+  } else if (typeof current === 'number') {
+    subObj = { welcome: current, grooming: current };
+  }
+  subObj[subKey] = Number(score);
+  allEvals[staffId].behavior[masseuseId] = subObj;
+
+  localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(allEvals));
+  pushToCloud();
+  return allEvals;
 }
 
 export function saveSingleScore(staffId, category, masseuseId, score) {
@@ -564,54 +629,40 @@ export function saveStaffEvaluations(staffId, category, scoresMap) {
   return allEvals;
 }
 
-// Calculate Staff Evaluation Progress Report for Admin
+// Calculate Staff Evaluation Progress Report for Admin (Behavior Evaluation)
 export function getStaffProgressReport() {
   const staffList = getStaffUsers();
-  const totalMasseuses = getMasseuses().length;
   const assignments = getBehaviorAssignments();
   const evaluations = getEvaluations();
 
   return staffList.map(staff => {
-    const userEvals = evaluations[staff.id] || { behavior: {}, responsibility: {} };
+    const userEvals = evaluations[staff.id]?.behavior || {};
+    const assignedIds = assignments[staff.id] || [];
+    const behTotal = assignedIds.length;
     
-    const respCompleted = Object.keys(userEvals.responsibility || {}).filter(
-      id => userEvals.responsibility[id] !== null && userEvals.responsibility[id] !== undefined
-    ).length;
-    const respTotal = totalMasseuses;
-    const respPercent = respTotal > 0 ? Math.round((respCompleted / respTotal) * 100) : 0;
+    // Completed if both 2.1 (welcome) and 2.2 (grooming) are evaluated
+    const behCompleted = assignedIds.filter(id => {
+      const score = userEvals[id];
+      if (score === null || score === undefined) return false;
+      if (typeof score === 'number') return true;
+      return score.welcome !== undefined && score.grooming !== undefined;
+    }).length;
 
-    let behCompleted = 0;
-    let behTotal = 0;
-    let behPercent = 0;
-    if (staff.isBehaviorEvaluator) {
-      const assignedIds = assignments[staff.id] || [];
-      behTotal = assignedIds.length;
-      behCompleted = assignedIds.filter(
-        id => userEvals.behavior?.[id] !== null && userEvals.behavior?.[id] !== undefined
-      ).length;
-      behPercent = behTotal > 0 ? Math.round((behCompleted / behTotal) * 100) : 0;
-    }
-
-    const totalRequired = respTotal + behTotal;
-    const totalDone = respCompleted + behCompleted;
-    const overallPercent = totalRequired > 0 ? Math.round((totalDone / totalRequired) * 100) : 0;
+    const behPercent = behTotal > 0 ? Math.round((behCompleted / behTotal) * 100) : 0;
 
     return {
       staff,
-      respCompleted,
-      respTotal,
-      respPercent,
       behCompleted,
       behTotal,
       behPercent,
       isBehaviorEvaluator: staff.isBehaviorEvaluator,
-      overallPercent,
-      isFullyCompleted: overallPercent === 100
+      overallPercent: behPercent,
+      isFullyCompleted: behTotal > 0 && behCompleted === behTotal
     };
   });
 }
 
-// Calculate comprehensive results for Admin Dashboard
+// Calculate comprehensive results for Admin Dashboard (Behavior-Only Evaluation)
 export function calculateResults() {
   const masseusesList = getMasseuses();
   const assignments = getBehaviorAssignments();
@@ -629,42 +680,41 @@ export function calculateResults() {
     }
 
     const assignedStaffName = staffList.find(s => s.id === assignedStaffId)?.name || '-';
-    const behaviorScore = evaluations[assignedStaffId]?.behavior?.[m.id] ?? null;
+    const rawEval = evaluations[assignedStaffId]?.behavior?.[m.id] ?? null;
 
-    const respScoresByStaff = {};
-    let respSum = 0;
-    let respCount = 0;
+    let welcomeScore = null;
+    let groomingScore = null;
+    let behaviorScore = null;
 
-    staffList.forEach(staff => {
-      const score = evaluations[staff.id]?.responsibility?.[m.id] ?? null;
-      respScoresByStaff[staff.id] = score;
-      if (score !== null && score !== undefined) {
-        respSum += score;
-        respCount++;
+    if (rawEval !== null && rawEval !== undefined) {
+      if (typeof rawEval === 'number') {
+        welcomeScore = rawEval;
+        groomingScore = rawEval;
+        behaviorScore = rawEval;
+      } else if (typeof rawEval === 'object') {
+        welcomeScore = rawEval.welcome ?? null;
+        groomingScore = rawEval.grooming ?? null;
+        if (welcomeScore !== null && groomingScore !== null) {
+          behaviorScore = Math.round(((welcomeScore + groomingScore) / 2) * 10) / 10;
+        } else if (welcomeScore !== null) {
+          behaviorScore = welcomeScore;
+        } else if (groomingScore !== null) {
+          behaviorScore = groomingScore;
+        }
       }
-    });
-
-    const avgResponsibility = respCount > 0 ? (respSum / respCount) : null;
-
-    let totalScore = null;
-    if (behaviorScore !== null && avgResponsibility !== null) {
-      totalScore = (behaviorScore + avgResponsibility) / 2;
-    } else if (avgResponsibility !== null) {
-      totalScore = avgResponsibility;
-    } else if (behaviorScore !== null) {
-      totalScore = behaviorScore;
     }
+
+    // Responsibility is closed and not included in score calculation
+    const totalScore = behaviorScore;
 
     return {
       masseuse: m,
       assignedBehaviorStaffId: assignedStaffId,
       assignedBehaviorStaffName: assignedStaffName,
-      behaviorScore: behaviorScore,
-      respScoresByStaff: respScoresByStaff,
-      respCount: respCount,
-      totalRespStaff: staffList.length,
-      avgResponsibility: avgResponsibility,
-      totalScore: totalScore
+      welcomeScore,
+      groomingScore,
+      behaviorScore,
+      totalScore
     };
   });
 
@@ -684,7 +734,6 @@ export function calculateResults() {
 
 // Seed Demo Random Mock Data
 export function seedMockEvaluations() {
-  const masseusesList = getMasseuses();
   const staffList = getStaffUsers();
   const assignments = getBehaviorAssignments();
   const mockEvals = {};
@@ -692,16 +741,14 @@ export function seedMockEvaluations() {
   staffList.forEach(staff => {
     mockEvals[staff.id] = { behavior: {}, responsibility: {} };
 
-    masseusesList.forEach((m, idx) => {
-      const base = 7 + Math.floor(Math.sin(idx + staff.name.length) * 2) + Math.floor(Math.random() * 2);
-      const score = Math.min(10, Math.max(5, base));
-      mockEvals[staff.id].responsibility[m.id] = score;
-    });
-
     if (staff.isBehaviorEvaluator && assignments[staff.id]) {
       assignments[staff.id].forEach((mId, idx) => {
-        const score = Math.min(10, Math.max(6, 8 + (idx % 3) - Math.floor(Math.random() * 2)));
-        mockEvals[staff.id].behavior[mId] = score;
+        const welcome = Math.min(10, Math.max(6, 8 + (idx % 3) - Math.floor(Math.random() * 2)));
+        const grooming = Math.min(10, Math.max(7, 9 - (idx % 2) - Math.floor(Math.random() * 2)));
+        mockEvals[staff.id].behavior[mId] = {
+          welcome,
+          grooming
+        };
       });
     }
   });

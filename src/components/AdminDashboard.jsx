@@ -47,10 +47,13 @@ import {
   AlertCircle,
   Calendar,
   RotateCcw,
-  Eye
+  Eye,
+  Wrench,
+  HeartHandshake,
+  Shirt
 } from 'lucide-react';
 
-export default function AdminDashboard({ currentUser }) {
+export default function AdminDashboard({ currentUser, onSettingsChange }) {
   const isAdmin = currentUser.role === 'admin';
   const hasDashboardAccess = isAdmin || Boolean(currentUser.canViewDashboard);
 
@@ -96,6 +99,8 @@ export default function AdminDashboard({ currentUser }) {
   // Settings State
   const [inputDeadline, setInputDeadline] = useState('');
   const [inputIsLocked, setInputIsLocked] = useState(false);
+  const [inputIsMaintenance, setInputIsMaintenance] = useState(false);
+  const [inputMaintenanceMessage, setInputMaintenanceMessage] = useState('');
 
   const loadDashboardData = () => {
     const calculated = calculateResults();
@@ -113,6 +118,8 @@ export default function AdminDashboard({ currentUser }) {
     setProgressReport(report);
     setInputDeadline(loadedSettings.deadline || '');
     setInputIsLocked(Boolean(loadedSettings.isLockedManually));
+    setInputIsMaintenance(Boolean(loadedSettings.isMaintenanceMode));
+    setInputMaintenanceMessage(loadedSettings.maintenanceMessage || 'ระบบกำลังปิดปรับปรุงชั่วคราว เพื่อบำรุงรักษาระบบและอัปเดตข้อมูล');
   };
 
   useEffect(() => {
@@ -126,17 +133,20 @@ export default function AdminDashboard({ currentUser }) {
     setTimeout(() => setNotice(''), 4000);
   };
 
-  // --- SAVE SYSTEM SETTINGS & DEADLINE ---
+  // --- SAVE SYSTEM SETTINGS, DEADLINE & MAINTENANCE MODE ---
   const handleSaveSettings = (e) => {
     e.preventDefault();
     const updated = saveSystemSettings({
       deadline: inputDeadline || null,
-      isLockedManually: inputIsLocked
+      isLockedManually: inputIsLocked,
+      isMaintenanceMode: inputIsMaintenance,
+      maintenanceMessage: inputMaintenanceMessage
     });
     setSystemSettings(updated);
     setIsSettingsModalOpen(false);
     loadDashboardData();
-    showNotice('บันทึกกำหนดเวลาและสถานะปิดระบบเรียบร้อยแล้ว!');
+    if (onSettingsChange) onSettingsChange();
+    showNotice('บันทึกการตั้งค่าระบบและ Maintenance Mode เรียบร้อยแล้ว!');
   };
 
   // --- STAFF MANAGEMENT HANDLERS ---
@@ -279,7 +289,7 @@ export default function AdminDashboard({ currentUser }) {
 
   const handleExportCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    csvContent += "อันดับ,รหัส,ชื่อหมอนวด,ผู้ประเมินพฤติกรรม,คะแนนพฤติกรรม,คะแนนความรับผิดชอบเฉลี่ย,คะแนนรวมเฉลี่ย\n";
+    csvContent += "อันดับ,รหัส,ชื่อหมอนวด,ผู้ประเมินพฤติกรรม,ข้อ 2.1 การต้อนรับ,ข้อ 2.2 การแต่งกาย,คะแนนรวมเฉลี่ยพฤติกรรม\n";
 
     results.forEach(item => {
       const row = [
@@ -287,8 +297,8 @@ export default function AdminDashboard({ currentUser }) {
         item.masseuse.code,
         `"${item.masseuse.name}"`,
         `"${item.assignedBehaviorStaffName}"`,
-        item.behaviorScore !== null ? item.behaviorScore : '-',
-        item.avgResponsibility !== null ? item.avgResponsibility.toFixed(2) : '-',
+        item.welcomeScore !== null ? item.welcomeScore : '-',
+        item.groomingScore !== null ? item.groomingScore : '-',
         item.totalScore !== null ? item.totalScore.toFixed(2) : '-'
       ].join(",");
       csvContent += row + "\n";
@@ -351,25 +361,37 @@ export default function AdminDashboard({ currentUser }) {
     r.masseuse.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (sortBy === 'behavior') {
-    displayedResults.sort((a, b) => (b.behaviorScore || 0) - (a.behaviorScore || 0));
-  } else if (sortBy === 'responsibility') {
-    displayedResults.sort((a, b) => (b.avgResponsibility || 0) - (a.avgResponsibility || 0));
+  if (sortBy === 'welcome') {
+    displayedResults.sort((a, b) => (b.welcomeScore || 0) - (a.welcomeScore || 0));
+  } else if (sortBy === 'grooming') {
+    displayedResults.sort((a, b) => (b.groomingScore || 0) - (a.groomingScore || 0));
   } else if (sortBy === 'name') {
     displayedResults.sort((a, b) => a.masseuse.name.localeCompare(b.masseuse.name, 'th'));
+  } else {
+    displayedResults.sort((a, b) => {
+      if (a.totalScore === null && b.totalScore === null) return 0;
+      if (a.totalScore === null) return 1;
+      if (b.totalScore === null) return -1;
+      return b.totalScore - a.totalScore;
+    });
   }
 
   const totalMasseuses = results.length;
   const topRanked = results.find(r => r.rank === 1 && r.totalScore !== null);
   
-  const validBehaviorScores = results.filter(r => r.behaviorScore !== null).map(r => r.behaviorScore);
-  const avgBehaviorOverall = validBehaviorScores.length > 0
-    ? (validBehaviorScores.reduce((a, b) => a + b, 0) / validBehaviorScores.length).toFixed(2)
+  const validWelcomeScores = results.map(r => r.welcomeScore).filter(s => s !== null && s !== undefined);
+  const avgWelcomeOverall = validWelcomeScores.length > 0
+    ? (validWelcomeScores.reduce((a, b) => a + b, 0) / validWelcomeScores.length).toFixed(2)
     : '-';
 
-  const validRespScores = results.filter(r => r.avgResponsibility !== null).map(r => r.avgResponsibility);
-  const avgRespOverall = validRespScores.length > 0
-    ? (validRespScores.reduce((a, b) => a + b, 0) / validRespScores.length).toFixed(2)
+  const validGroomingScores = results.map(r => r.groomingScore).filter(s => s !== null && s !== undefined);
+  const avgGroomingOverall = validGroomingScores.length > 0
+    ? (validGroomingScores.reduce((a, b) => a + b, 0) / validGroomingScores.length).toFixed(2)
+    : '-';
+
+  const validBehaviorScores = results.map(r => r.behaviorScore).filter(s => s !== null && s !== undefined);
+  const avgBehaviorOverall = validBehaviorScores.length > 0
+    ? (validBehaviorScores.reduce((a, b) => a + b, 0) / validBehaviorScores.length).toFixed(2)
     : '-';
 
   const behaviorEvaluatorsList = staffUsers.filter(s => s.isBehaviorEvaluator);
@@ -396,7 +418,7 @@ export default function AdminDashboard({ currentUser }) {
         </div>
       )}
 
-      {/* Deadline System Status Card */}
+      {/* System Status & Maintenance Card */}
       <div className="glass-panel" style={{
         padding: '16px 24px',
         marginBottom: '20px',
@@ -405,29 +427,35 @@ export default function AdminDashboard({ currentUser }) {
         justifyContent: 'space-between',
         flexWrap: 'wrap',
         gap: '12px',
-        borderColor: systemSettings.isLockedManually || (systemSettings.deadline && new Date() > new Date(systemSettings.deadline))
-          ? 'rgba(244, 63, 94, 0.4)'
+        borderColor: systemSettings.isMaintenanceMode || systemSettings.isLockedManually
+          ? 'rgba(245, 158, 11, 0.4)'
           : 'var(--border-color)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Clock size={22} color={systemSettings.isLockedManually ? '#f43f5e' : '#14b8a6'} />
-          <div>
-            <div style={{ fontWeight: 600, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              กำหนดเวลาปิดระบบประเมิน:
-              {systemSettings.deadline ? (
-                <span className="badge badge-teal">
-                  <Calendar size={14} /> {new Date(systemSettings.deadline).toLocaleString('th-TH')}
-                </span>
-              ) : (
-                <span className="badge badge-gray">ยังไม่ได้กำหนดกำหนดเวลา (เปิดรับตลอด)</span>
-              )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <Clock size={22} color={systemSettings.isMaintenanceMode ? '#f59e0b' : '#14b8a6'} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 600, fontSize: '0.92rem' }}>สถานะระบบ:</span>
+            {systemSettings.isMaintenanceMode ? (
+              <span className="badge badge-gold" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <Wrench size={14} /> เปิดใช้งาน Maintenance Mode อยู่
+              </span>
+            ) : (
+              <span className="badge badge-teal">เปิดให้บริการปกติ</span>
+            )}
 
-              {systemSettings.isLockedManually && (
-                <span className="badge badge-rose" style={{ background: 'rgba(244,63,94,0.2)', color: '#fda4af' }}>
-                  ปิดระบบแบบแมนนวลแล้ว
-                </span>
-              )}
-            </div>
+            {systemSettings.deadline ? (
+              <span className="badge badge-teal">
+                <Calendar size={14} /> สิ้นสุด: {new Date(systemSettings.deadline).toLocaleString('th-TH')}
+              </span>
+            ) : (
+              <span className="badge badge-gray">ไม่มีกำหนดเวลาปิด</span>
+            )}
+
+            {systemSettings.isLockedManually && (
+              <span className="badge badge-rose" style={{ background: 'rgba(244,63,94,0.2)', color: '#fda4af' }}>
+                ปิดรับการประเมินแล้ว
+              </span>
+            )}
           </div>
         </div>
 
@@ -436,10 +464,10 @@ export default function AdminDashboard({ currentUser }) {
             type="button"
             onClick={() => setIsSettingsModalOpen(true)}
             className="btn btn-secondary"
-            style={{ fontSize: '0.85rem', padding: '6px 14px' }}
+            style={{ fontSize: '0.85rem', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             <Clock size={16} />
-            ตั้งค่าวันเวลาปิดระบบ
+            ตั้งค่าระบบ & Maintenance Mode
           </button>
         )}
       </div>
@@ -463,7 +491,7 @@ export default function AdminDashboard({ currentUser }) {
               )}
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', margin: 0 }}>
-              สรุปคะแนนประเมินหมอนวด {totalMasseuses} คน ค่าเฉลี่ยพฤติกรรม และความรับผิดชอบจากเจ้าหน้าที่ {staffUsers.length} คน
+              สรุปคะแนนประเมินพฤติกรรมหมอนวด {totalMasseuses} คน (แบ่งกลุ่มละ 5 คน) จากผู้ประเมิน {staffUsers.length} คน
             </p>
           </div>
 
@@ -479,7 +507,7 @@ export default function AdminDashboard({ currentUser }) {
                   title="รีเซ็ตคะแนนประเมินทั้งหมดในระบบกลับเป็นเริ่มต้นด้วยปุ่มเดียว"
                 >
                   <RotateCcw size={16} />
-                  รีเซ็ตคะแนนประเมินทั้งระบบ (1-Click)
+                  รีเซ็ตคะแนนประเมิน (1-Click)
                 </button>
 
                 <button
@@ -509,7 +537,7 @@ export default function AdminDashboard({ currentUser }) {
 
                 <button type="button" onClick={handleReRandomize} className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>
                   <RefreshCw size={16} />
-                  สุ่มกลุ่มพฤติกรรมใหม่
+                  สุ่มจัดกลุ่มหมอนวดใหม่ (กลุ่มละ 5 คน)
                 </button>
               </>
             )}
@@ -545,39 +573,39 @@ export default function AdminDashboard({ currentUser }) {
         {/* Card 2: Staff Completion Progress Counter */}
         <div className="glass-panel" style={{ padding: '20px' }}>
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 500 }}>
-            📊 ความก้าวหน้าประเมินเจ้าหน้าที่
+            📊 ความก้าวหน้าผู้ประเมิน
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 700, color: 'var(--accent-teal)' }}>
             {fullyCompletedStaffCount} / {staffUsers.length} <span style={{ fontSize: '0.9rem', fontWeight: 400, color: 'var(--text-muted)' }}>คน</span>
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            ประเมินครบสมบูรณ์แล้ว
+            ประเมินครบกลุ่ม 5 คนสมบูรณ์แล้ว
           </div>
         </div>
 
-        {/* Card 3: Avg Behavior Score */}
+        {/* Card 3: Avg Welcome Score */}
         <div className="glass-panel" style={{ padding: '20px' }}>
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 500 }}>
-            ⭐ คะแนนเฉลี่ยพฤติกรรมรวม
+            🤝 คะแนนเฉลี่ย 2.1 (การต้อนรับ)
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#a78bfa' }}>
-            {avgBehaviorOverall} <span style={{ fontSize: '0.9rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ 10</span>
+            {avgWelcomeOverall} <span style={{ fontSize: '0.9rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ 10</span>
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            ผู้ประเมินพฤติกรรม: {behaviorEvaluatorsList.map(s => s.name).join(', ') || 'ยังไม่กำหนด'}
+            การต้อนรับ ดูแลผู้มารับบริการ
           </div>
         </div>
 
-        {/* Card 4: Avg Responsibility Score */}
+        {/* Card 4: Avg Grooming Score */}
         <div className="glass-panel" style={{ padding: '20px' }}>
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 500 }}>
-            📋 คะแนนเฉลี่ยความรับผิดชอบรวม
+            👔 คะแนนเฉลี่ย 2.2 (การแต่งกาย)
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#2dd4bf' }}>
-            {avgRespOverall} <span style={{ fontSize: '0.9rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ 10</span>
+            {avgGroomingOverall} <span style={{ fontSize: '0.9rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ 10</span>
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            จากเจ้าหน้าที่ทั้ง {staffUsers.length} คนเฉลี่ยกัน
+            การแต่งกาย สุภาพเรียบร้อย เหมาะสม
           </div>
         </div>
       </div>
@@ -610,8 +638,8 @@ export default function AdminDashboard({ currentUser }) {
                 style={{ width: 'auto', padding: '6px 12px', fontSize: '0.85rem' }}
               >
                 <option value="rank">ตามอันดับคะแนนรวม (Rank)</option>
-                <option value="behavior">คะแนนพฤติกรรมสูงสุด</option>
-                <option value="responsibility">คะแนนความรับผิดชอบสูงสุด</option>
+                <option value="welcome">คะแนนการต้อนรับสูงสุด (2.1)</option>
+                <option value="grooming">คะแนนการแต่งกายสูงสุด (2.2)</option>
                 <option value="name">เรียงตามชื่อ</option>
               </select>
             </>
@@ -632,7 +660,7 @@ export default function AdminDashboard({ currentUser }) {
               className={`btn ${viewMode === 'matrix' ? 'btn-primary' : 'btn-secondary'}`}
               style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px' }}
             >
-              <Grid size={16} /> รายละเอียด Matrix ({staffUsers.length} คน)
+              <Grid size={16} /> ตารางกลุ่มประเมิน Matrix
             </button>
             <button
               type="button"
@@ -654,15 +682,19 @@ export default function AdminDashboard({ currentUser }) {
               <tr style={{ background: 'rgba(255, 255, 255, 0.04)', borderBottom: '1px solid var(--border-color)' }}>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>อันดับ</th>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>ชื่อหมอนวด</th>
-                <th style={{ padding: '14px 16px', fontWeight: 600 }}>คะแนนพฤติกรรม (10)</th>
-                <th style={{ padding: '14px 16px', fontWeight: 600 }}>คะแนนความรับผิดชอบเฉลี่ย (10)</th>
-                <th style={{ padding: '14px 16px', fontWeight: 600 }}>คะแนนรวมเฉลี่ย</th>
+                <th style={{ padding: '14px 16px', fontWeight: 600 }}>ผู้ประเมิน</th>
+                <th style={{ padding: '14px 16px', fontWeight: 600, color: '#38bdf8' }}>ข้อ 2.1 การต้อนรับ (10)</th>
+                <th style={{ padding: '14px 16px', fontWeight: 600, color: '#fb7185' }}>ข้อ 2.2 การแต่งกาย (10)</th>
+                <th style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--accent-gold)' }}>คะแนนเฉลี่ยพฤติกรรม</th>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>สถานะการประเมิน</th>
               </tr>
             </thead>
             <tbody>
               {displayedResults.map(item => {
                 const isTop3 = item.rank <= 3 && item.rank !== '-';
+                const isComplete = item.welcomeScore !== null && item.groomingScore !== null;
+                const isPartial = (item.welcomeScore !== null || item.groomingScore !== null) && !isComplete;
+
                 return (
                   <tr
                     key={item.masseuse.id}
@@ -693,30 +725,26 @@ export default function AdminDashboard({ currentUser }) {
                     </td>
 
                     <td style={{ padding: '14px 16px' }}>
-                      {item.behaviorScore !== null ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontWeight: 700, color: '#a78bfa', fontSize: '1rem' }}>
-                            {item.behaviorScore}
-                          </span>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                            ({item.assignedBehaviorStaffName})
-                          </span>
-                        </div>
+                      <span className="badge badge-purple" style={{ fontSize: '0.8rem' }}>
+                        {item.assignedBehaviorStaffName}
+                      </span>
+                    </td>
+
+                    <td style={{ padding: '14px 16px' }}>
+                      {item.welcomeScore !== null ? (
+                        <span style={{ fontWeight: 700, color: '#38bdf8', fontSize: '1rem' }}>
+                          {item.welcomeScore} / 10
+                        </span>
                       ) : (
                         <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>ยังไม่ประเมิน</span>
                       )}
                     </td>
 
                     <td style={{ padding: '14px 16px' }}>
-                      {item.avgResponsibility !== null ? (
-                        <div>
-                          <span style={{ fontWeight: 700, color: '#2dd4bf', fontSize: '1rem' }}>
-                            {item.avgResponsibility.toFixed(2)}
-                          </span>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: '6px' }}>
-                            ({item.respCount}/{item.totalRespStaff} คน)
-                          </span>
-                        </div>
+                      {item.groomingScore !== null ? (
+                        <span style={{ fontWeight: 700, color: '#fb7185', fontSize: '1rem' }}>
+                          {item.groomingScore} / 10
+                        </span>
                       ) : (
                         <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>ยังไม่ประเมิน</span>
                       )}
@@ -734,7 +762,7 @@ export default function AdminDashboard({ currentUser }) {
                           fontSize: '1.05rem',
                           color: isTop3 ? 'var(--accent-gold)' : 'var(--text-primary)'
                         }}>
-                          {item.totalScore.toFixed(2)} / 10
+                          {item.totalScore.toFixed(1)} / 10
                         </div>
                       ) : (
                         <span style={{ color: 'var(--text-muted)' }}>-</span>
@@ -742,9 +770,9 @@ export default function AdminDashboard({ currentUser }) {
                     </td>
 
                     <td style={{ padding: '14px 16px' }}>
-                      {item.behaviorScore !== null && item.respCount === staffUsers.length ? (
+                      {isComplete ? (
                         <span className="badge badge-teal">เสร็จสมบูรณ์</span>
-                      ) : item.behaviorScore !== null || item.respCount > 0 ? (
+                      ) : isPartial ? (
                         <span className="badge badge-gold">อยู่ระหว่างประเมิน</span>
                       ) : (
                         <span className="badge badge-gray">ยังไม่เริ่ม</span>
@@ -758,62 +786,103 @@ export default function AdminDashboard({ currentUser }) {
         </div>
       )}
 
-      {/* VIEW 2: FULL BREAKDOWN MATRIX TABLE */}
+      {/* VIEW 2: FULL BREAKDOWN MATRIX TABLE (กลุ่มผู้ประเมิน 6 คน คนละ 5 ราย) */}
       {viewMode === 'matrix' && (
-        <div className="glass-panel" style={{ overflowX: 'auto', borderRadius: 'var(--radius-xl)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-            <thead>
-              <tr style={{ background: 'rgba(255, 255, 255, 0.04)', borderBottom: '1px solid var(--border-color)' }}>
-                <th style={{ padding: '12px 14px', fontWeight: 600 }}>หมอนวด</th>
-                <th style={{ padding: '12px 14px', fontWeight: 600, color: '#a78bfa' }}>
-                  พฤติกรรม (10)
-                </th>
-                {staffUsers.map(staff => (
-                  <th key={staff.id} style={{ padding: '12px 14px', fontWeight: 600 }}>
-                    {staff.name} {staff.role === 'admin' ? '(Admin)' : ''}
-                  </th>
-                ))}
-                <th style={{ padding: '12px 14px', fontWeight: 600, color: '#2dd4bf' }}>
-                  เฉลี่ยความรับผิดชอบ
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedResults.map(item => (
-                <tr
-                  key={item.masseuse.id}
-                  style={{ borderBottom: '1px solid var(--border-color)' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '16px' }}>
+            {staffUsers.filter(s => s.isBehaviorEvaluator).map(evaluator => {
+              const assignedMasseuses = results.filter(r => r.assignedBehaviorStaffId === evaluator.id);
+              const completedCount = assignedMasseuses.filter(r => r.welcomeScore !== null && r.groomingScore !== null).length;
+              const isAllDone = assignedMasseuses.length > 0 && completedCount === assignedMasseuses.length;
+
+              return (
+                <div
+                  key={evaluator.id}
+                  className="glass-panel"
+                  style={{
+                    padding: '18px',
+                    borderRadius: 'var(--radius-lg)',
+                    border: isAllDone ? '1px solid rgba(45, 212, 191, 0.4)' : '1px solid var(--border-color)',
+                    background: 'rgba(255, 255, 255, 0.03)'
+                  }}
                 >
-                  <td style={{ padding: '12px 14px', fontWeight: 600 }}>
-                    {item.masseuse.name} ({item.masseuse.code})
-                  </td>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700,
+                        color: '#fff',
+                        fontSize: '0.9rem'
+                      }}>
+                        {evaluator.name.charAt(0)}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {evaluator.name}
+                          {evaluator.role === 'admin' && <span className="badge badge-gold" style={{ fontSize: '0.65rem' }}>Admin</span>}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          @{evaluator.username} • กลุ่มสุ่ม {assignedMasseuses.length} คน
+                        </div>
+                      </div>
+                    </div>
 
-                  <td style={{ padding: '12px 14px', color: '#a78bfa', fontWeight: 700 }}>
-                    {item.behaviorScore !== null ? `${item.behaviorScore} (${item.assignedBehaviorStaffName})` : '-'}
-                  </td>
+                    <div>
+                      {isAllDone ? (
+                        <span className="badge badge-teal" style={{ fontSize: '0.75rem' }}>
+                          <CheckCircle2 size={13} /> ครบ {completedCount}/{assignedMasseuses.length}
+                        </span>
+                      ) : (
+                        <span className="badge badge-gold" style={{ fontSize: '0.75rem' }}>
+                          {completedCount}/{assignedMasseuses.length} คน
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-                  {staffUsers.map(staff => {
-                    const score = item.respScoresByStaff[staff.id];
-                    return (
-                      <td key={staff.id} style={{ padding: '12px 14px' }}>
-                        {score !== null && score !== undefined ? (
-                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{score}</span>
-                        ) : (
-                          <span style={{ color: 'var(--text-muted)' }}>-</span>
-                        )}
-                      </td>
-                    );
-                  })}
-
-                  <td style={{ padding: '12px 14px', color: '#2dd4bf', fontWeight: 700 }}>
-                    {item.avgResponsibility !== null ? item.avgResponsibility.toFixed(2) : '-'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                        <th style={{ padding: '6px 8px' }}>หมอนวด</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'center', color: '#38bdf8' }}>2.1 ต้อนรับ</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'center', color: '#fb7185' }}>2.2 แต่งกาย</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'center', color: 'var(--accent-gold)' }}>เฉลี่ย</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assignedMasseuses.map((item, idx) => (
+                        <tr key={item.masseuse.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                          <td style={{ padding: '8px' }}>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {idx + 1}. {item.masseuse.name}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                              {item.masseuse.code}
+                            </div>
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600, color: item.welcomeScore !== null ? '#38bdf8' : 'var(--text-muted)' }}>
+                            {item.welcomeScore !== null ? item.welcomeScore : '-'}
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600, color: item.groomingScore !== null ? '#fb7185' : 'var(--text-muted)' }}>
+                            {item.groomingScore !== null ? item.groomingScore : '-'}
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'center', fontWeight: 700, color: item.totalScore !== null ? 'var(--accent-gold)' : 'var(--text-muted)' }}>
+                            {item.totalScore !== null ? item.totalScore.toFixed(1) : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -874,28 +943,26 @@ export default function AdminDashboard({ currentUser }) {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                      <span>ประเมินความรับผิดชอบ (30 คน):</span>
-                      <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {item.respCompleted} / {item.respTotal} คน ({item.respPercent}%)
-                      </span>
-                    </div>
-                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${item.respPercent}%`, background: 'var(--accent-teal)', borderRadius: '3px' }} />
-                    </div>
-                  </div>
-
                   {item.isBehaviorEvaluator && (
                     <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: '6px' }}>
                         <span>ประเมินพฤติกรรม (กลุ่มสุ่ม {item.behTotal} คน):</span>
-                        <span style={{ fontWeight: 600, color: '#a78bfa' }}>
+                        <span style={{ fontWeight: 700, color: item.isFullyCompleted ? '#2dd4bf' : '#a78bfa' }}>
                           {item.behCompleted} / {item.behTotal} คน ({item.behPercent}%)
                         </span>
                       </div>
-                      <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${item.behPercent}%`, background: '#8b5cf6', borderRadius: '3px' }} />
+                      <div style={{ height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${item.behPercent}%`,
+                          background: item.isFullyCompleted ? 'linear-gradient(90deg, #14b8a6, #2dd4bf)' : 'linear-gradient(90deg, #8b5cf6, #a78bfa)',
+                          borderRadius: '4px',
+                          transition: 'width 0.4s ease'
+                        }} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        <span>หัวข้อ 2.1 การต้อนรับ & 2.2 การแต่งกาย</span>
+                        <span>{item.isFullyCompleted ? 'ประเมินครบถ้วน' : `คงเหลือ ${item.behTotal - item.behCompleted} คน`}</span>
                       </div>
                     </div>
                   )}
@@ -960,6 +1027,53 @@ export default function AdminDashboard({ currentUser }) {
                     สั่งปิดรับการประเมินทันที (Manual Lock)
                   </span>
                 </label>
+              </div>
+
+              {/* MAINTENANCE MODE CONTROLS */}
+              <div style={{
+                borderTop: '1px solid var(--border-color)',
+                background: inputIsMaintenance ? 'rgba(245, 158, 11, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                borderRadius: 'var(--radius-md)',
+                padding: '14px',
+                border: inputIsMaintenance ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border-color)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <Wrench size={18} color={inputIsMaintenance ? '#f59e0b' : 'var(--text-muted)'} />
+                  <span style={{ fontWeight: 700, fontSize: '0.95rem', color: inputIsMaintenance ? 'var(--accent-gold)' : 'var(--text-primary)' }}>
+                    โหมดปิดปรับปรุงระบบ (Maintenance Mode)
+                  </span>
+                </div>
+                
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem', marginBottom: inputIsMaintenance ? '10px' : '0' }}>
+                  <input
+                    type="checkbox"
+                    checked={inputIsMaintenance}
+                    onChange={e => setInputIsMaintenance(e.target.checked)}
+                    style={{ width: '20px', height: '20px', accentColor: '#f59e0b' }}
+                  />
+                  <span style={{ fontWeight: 600, color: inputIsMaintenance ? 'var(--accent-gold)' : 'var(--text-primary)' }}>
+                    เปิดใช้งานโหมดปิดปรับปรุง (Maintenance Mode)
+                  </span>
+                </label>
+
+                {inputIsMaintenance && (
+                  <div>
+                    <label style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                      ข้อความประกาศแจ้งเจ้าหน้าที่ (Announcement Message)
+                    </label>
+                    <textarea
+                      className="input-field"
+                      rows={2}
+                      value={inputMaintenanceMessage}
+                      onChange={e => setInputMaintenanceMessage(e.target.value)}
+                      placeholder="ระบบกำลังปิดปรับปรุงชั่วคราว..."
+                      style={{ fontSize: '0.85rem', resize: 'vertical' }}
+                    />
+                    <span style={{ fontSize: '0.75rem', color: '#fbbf24', marginTop: '4px', display: 'block' }}>
+                      ⚠️ เมื่อเปิดใช้งาน ผู้ใช้ทั่วไปจะไม่สามารถเข้าใช้งานหรือประเมินได้ และจะเห็นหน้าประกาศนี้ (Admin ยังคงเข้าใช้งานได้ตามปกติ)
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>

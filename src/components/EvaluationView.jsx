@@ -3,28 +3,27 @@ import {
   getMasseuses,
   getBehaviorAssignments,
   getEvaluations,
-  saveSingleScore,
-  saveStaffEvaluations,
+  saveBehaviorSubScore,
   isEvaluationClosed,
-  getSystemSettings
+  getSystemSettings,
+  BEHAVIOR_SUB_CRITERIA
 } from '../data/mockData';
 import {
-  UserCheck,
   Award,
   CheckCircle2,
   AlertCircle,
   Sparkles,
   Search,
   Check,
-  Save,
-  Info,
   Lock,
-  Clock
+  Clock,
+  HeartHandshake,
+  Shirt,
+  UserCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export default function EvaluationView({ currentUser }) {
-  const [activeCategory, setActiveCategory] = useState('responsibility');
   const [masseuses, setMasseuses] = useState([]);
   const [assignments, setAssignments] = useState({});
   const [evaluations, setEvaluations] = useState({});
@@ -46,12 +45,6 @@ export default function EvaluationView({ currentUser }) {
     setEvaluations(loadedEvals);
     setSystemSettings(loadedSettings);
     setIsClosed(closedStatus);
-
-    if (currentUser.isBehaviorEvaluator) {
-      setActiveCategory('behavior');
-    } else {
-      setActiveCategory('responsibility');
-    }
   }, [currentUser]);
 
   const showToast = (msg) => {
@@ -59,63 +52,73 @@ export default function EvaluationView({ currentUser }) {
     setTimeout(() => setToastMessage(''), 3000);
   };
 
-  const handleScoreChange = (category, masseuseId, score) => {
+  const handleSubScoreChange = (masseuseId, subKey, score) => {
     if (isClosed && currentUser.role !== 'admin') {
       alert('ระบบปิดรับการประเมินแล้ว ไม่สามารถบันทึกหรือเปลี่ยนคะแนนได้');
       return;
     }
 
     try {
-      const updated = saveSingleScore(currentUser.id, category, masseuseId, score);
+      const updated = saveBehaviorSubScore(currentUser.id, masseuseId, subKey, score);
       setEvaluations({ ...updated });
       showToast(`บันทึกคะแนน ${score} คะแนนเรียบร้อย`);
-      checkCompletion(category, updated);
+      checkCompletion(updated);
     } catch (err) {
       alert(err.message);
     }
   };
 
-  const checkCompletion = (category, currentEvals) => {
-    const userEvals = currentEvals[currentUser.id]?.[category] || {};
+  const checkCompletion = (currentEvals) => {
+    const userBehavior = currentEvals[currentUser.id]?.behavior || {};
+    const assignedIds = assignments[currentUser.id] || [];
+    
+    const isAllDone = assignedIds.length > 0 && assignedIds.every(id => {
+      const evalItem = userBehavior[id];
+      if (!evalItem) return false;
+      if (typeof evalItem === 'number') return true;
+      return evalItem.welcome !== undefined && evalItem.grooming !== undefined;
+    });
 
-    if (category === 'behavior' && currentUser.isBehaviorEvaluator) {
-      const assignedIds = assignments[currentUser.id] || [];
-      const isAllDone = assignedIds.length > 0 && assignedIds.every(id => userEvals[id] !== undefined && userEvals[id] !== null);
-      if (isAllDone) {
-        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-      }
-    } else if (category === 'responsibility') {
-      const isAllDone = masseuses.length > 0 && masseuses.every(m => userEvals[m.id] !== undefined && userEvals[m.id] !== null);
-      if (isAllDone) {
-        confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
-      }
+    if (isAllDone) {
+      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
     }
   };
 
-  const userCategoryEvals = evaluations[currentUser.id]?.[activeCategory] || {};
+  const userBehaviorEvals = evaluations[currentUser.id]?.behavior || {};
+  const assignedIds = assignments[currentUser.id] || [];
+  const assignedMasseuses = masseuses.filter(m => assignedIds.includes(m.id));
 
-  let listToDisplay = [];
-  if (activeCategory === 'behavior') {
-    if (currentUser.isBehaviorEvaluator) {
-      const assignedIds = assignments[currentUser.id] || [];
-      listToDisplay = masseuses.filter(m => assignedIds.includes(m.id));
-    }
-  } else {
-    listToDisplay = masseuses;
-  }
-
-  const filteredList = listToDisplay.filter(m => {
+  const filteredList = assignedMasseuses.filter(m => {
     const matchesSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           m.code.toLowerCase().includes(searchTerm.toLowerCase());
-    const isEvaluated = userCategoryEvals[m.id] !== undefined && userCategoryEvals[m.id] !== null;
+    const evalItem = userBehaviorEvals[m.id];
+    let isFullyDone = false;
+    let isPartiallyDone = false;
 
-    if (statusFilter === 'pending') return matchesSearch && !isEvaluated;
-    if (statusFilter === 'completed') return matchesSearch && isEvaluated;
+    if (evalItem) {
+      if (typeof evalItem === 'number') {
+        isFullyDone = true;
+      } else {
+        const hasWelcome = evalItem.welcome !== undefined;
+        const hasGrooming = evalItem.grooming !== undefined;
+        isFullyDone = hasWelcome && hasGrooming;
+        isPartiallyDone = hasWelcome || hasGrooming;
+      }
+    }
+
+    if (statusFilter === 'pending') return matchesSearch && !isFullyDone;
+    if (statusFilter === 'completed') return matchesSearch && isFullyDone;
     return matchesSearch;
   });
 
-  const totalToEvaluate = listToDisplay.length;
-  const completedCount = listToDisplay.filter(m => userCategoryEvals[m.id] !== undefined && userCategoryEvals[m.id] !== null).length;
+  const totalToEvaluate = assignedMasseuses.length;
+  const completedCount = assignedMasseuses.filter(m => {
+    const item = userBehaviorEvals[m.id];
+    if (!item) return false;
+    if (typeof item === 'number') return true;
+    return item.welcome !== undefined && item.grooming !== undefined;
+  }).length;
+
   const progressPercent = totalToEvaluate > 0 ? Math.round((completedCount / totalToEvaluate) * 100) : 0;
 
   return (
@@ -172,308 +175,344 @@ export default function EvaluationView({ currentUser }) {
         </div>
       )}
 
-      {/* Section Switcher Tabs */}
-      <div className="glass-panel" style={{ padding: '8px', marginBottom: '24px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          onClick={() => setActiveCategory('behavior')}
-          style={{
-            flex: 1,
-            minWidth: '220px',
-            padding: '14px 20px',
-            borderRadius: 'var(--radius-lg)',
-            border: 'none',
-            background: activeCategory === 'behavior'
-              ? 'linear-gradient(135deg, #8b5cf6, #6d28d9)'
-              : 'transparent',
-            color: activeCategory === 'behavior' ? '#ffffff' : 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontWeight: 600,
-            fontSize: '0.98rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            transition: 'var(--transition-fast)'
-          }}
-        >
-          <Award size={20} />
-          1. ประเมินพฤติกรรม (กลุ่มสุ่ม)
-          {currentUser.isBehaviorEvaluator && (
-            <span className="badge badge-purple" style={{ background: 'rgba(255,255,255,0.2)', color: '#fff' }}>
-              ผู้ประเมิน
-            </span>
-          )}
-        </button>
+      {/* Header Progress Card */}
+      <div className="glass-panel animate-fade-in" style={{ padding: '24px 28px', marginBottom: '24px', borderRadius: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '16px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+              <div style={{
+                background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)',
+                color: '#fff',
+                padding: '6px',
+                borderRadius: '10px',
+                display: 'inline-flex'
+              }}>
+                <Award size={20} />
+              </div>
+              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0, letterSpacing: '-0.3px' }}>
+                การประเมินพฤติกรรมหมอนวด
+              </h2>
+              <span className="badge badge-purple" style={{ fontSize: '0.78rem' }}>
+                กลุ่มสุ่ม 5 คน
+              </span>
+            </div>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+              คุณ <strong>{currentUser.name}</strong> ได้รับมอบหมายประเมินหมอนวดจำนวน <strong>{totalToEvaluate} คน</strong> โดยประเมิน 2 หัวข้อย่อย (คะแนน 1 - 10)
+            </p>
+          </div>
 
-        <button
-          type="button"
-          onClick={() => setActiveCategory('responsibility')}
-          style={{
-            flex: 1,
-            minWidth: '220px',
-            padding: '14px 20px',
-            borderRadius: 'var(--radius-lg)',
-            border: 'none',
-            background: activeCategory === 'responsibility'
-              ? 'linear-gradient(135deg, #14b8a6, #0d9488)'
-              : 'transparent',
-            color: activeCategory === 'responsibility' ? '#ffffff' : 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontWeight: 600,
-            fontSize: '0.98rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            transition: 'var(--transition-fast)'
-          }}
-        >
-          <UserCheck size={20} />
-          2. ประเมินความรับผิดชอบในที่ทำงาน (หมอนวดทั้งหมด)
-          <span className="badge badge-teal" style={{ background: 'rgba(255,255,255,0.2)', color: '#fff' }}>
-            เจ้าหน้าที่ทุกคน
-          </span>
-        </button>
+          {/* Progress Count Pill */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: progressPercent === 100 ? '#2dd4bf' : 'var(--text-primary)' }}>
+                {completedCount} / {totalToEvaluate} คน
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                ประเมินครบทั้ง 2 ข้อ ({progressPercent}%)
+              </div>
+            </div>
+
+            {progressPercent === 100 && (
+              <div style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '50%',
+                background: 'rgba(20, 184, 166, 0.2)',
+                color: '#2dd4bf',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid rgba(20, 184, 166, 0.4)'
+              }}>
+                <CheckCircle2 size={26} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div style={{ height: '10px', width: '100%', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', overflow: 'hidden' }}>
+          <div style={{
+            height: '100%',
+            width: `${progressPercent}%`,
+            background: 'linear-gradient(90deg, #14b8a6, #8b5cf6)',
+            borderRadius: '6px',
+            transition: 'width 0.4s ease'
+          }} />
+        </div>
       </div>
 
-      {/* Behavior Assessment Non-Evaluator Notice */}
-      {activeCategory === 'behavior' && !currentUser.isBehaviorEvaluator && (
-        <div className="glass-panel animate-fade-in" style={{ padding: '32px', textAlign: 'center', marginBottom: '24px' }}>
+      {/* Criteria Info Banner */}
+      <div className="glass-panel" style={{
+        padding: '16px 20px',
+        marginBottom: '24px',
+        borderRadius: '16px',
+        background: 'rgba(139, 92, 246, 0.08)',
+        border: '1px solid rgba(139, 92, 246, 0.25)',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: '14px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
           <div style={{
-            width: '60px',
-            height: '60px',
-            borderRadius: '50%',
-            background: 'rgba(245, 158, 11, 0.15)',
-            color: '#f59e0b',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '16px'
+            background: 'rgba(139, 92, 246, 0.2)',
+            color: '#a78bfa',
+            padding: '8px',
+            borderRadius: '10px',
+            marginTop: '2px'
           }}>
-            <Info size={32} />
+            <HeartHandshake size={20} />
           </div>
-          <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '8px' }}>
-            สิทธิ์การประเมินพฤติกรรม
-          </h2>
-          <p style={{ color: 'var(--text-secondary)', maxWidth: '600px', margin: '0 auto 20px auto', lineHeight: 1.6 }}>
-            ส่วนประเมินพฤติกรรมนี้ได้รับการกำหนดให้ผู้ประเมินตามสิทธิ์ที่ Admin กำหนด สุ่มประเมินหมอนวดคนละกลุ่ม
-            <br />
-            คุณ ({currentUser.name}) สามารถทำรายการในหมวด <strong>"ประเมินความรับผิดชอบในที่ทำงาน"</strong> สำหรับหมอนวดทุกคนได้ตามปกติครับ
-          </p>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#ddd6fe' }}>
+              หัวข้อ 2.1: การต้อนรับ ดูแลผู้มารับบริการ
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              ตั้งแต่เริ่ม จบเสร็จสิ้นบริการ ไหว้ ยิ้มแย้ม เอาใจใส่สอบถาม
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <div style={{
+            background: 'rgba(20, 184, 166, 0.2)',
+            color: '#2dd4bf',
+            padding: '8px',
+            borderRadius: '10px',
+            marginTop: '2px'
+          }}>
+            <Shirt size={20} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#99f6e4' }}>
+              หัวข้อ 2.2: การแต่งกาย สุภาพเรียบร้อย เหมาะสม
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              ยูนิฟอร์มสะอาด ทรงผมเรียบร้อย ถูกสุขอนามัย และกาลเทศะ
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search & Filter Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
+        <div style={{ position: 'relative', width: '280px' }}>
+          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            type="text"
+            className="input-field"
+            style={{ paddingLeft: '38px' }}
+            placeholder="ค้นหาชื่อ หรือรหัสหมอนวด..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: '6px' }}>
           <button
             type="button"
-            className="btn btn-primary"
-            onClick={() => setActiveCategory('responsibility')}
+            onClick={() => setStatusFilter('all')}
+            className={`btn ${statusFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '6px 14px', fontSize: '0.85rem' }}
           >
-            <UserCheck size={18} />
-            ไปยังหน้าประเมินความรับผิดชอบ
+            ทั้งหมด ({totalToEvaluate})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('pending')}
+            className={`btn ${statusFilter === 'pending' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '6px 14px', fontSize: '0.85rem' }}
+          >
+            ยังไม่ครบ ({totalToEvaluate - completedCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('completed')}
+            className={`btn ${statusFilter === 'completed' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '6px 14px', fontSize: '0.85rem' }}
+          >
+            ครบแล้ว ({completedCount})
           </button>
         </div>
-      )}
+      </div>
 
-      {/* Evaluation Interface for Active User */}
-      {(activeCategory === 'responsibility' || (activeCategory === 'behavior' && currentUser.isBehaviorEvaluator)) && (
-        <div>
-          {/* Header Progress Card */}
-          <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '16px' }}>
-              <div>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {activeCategory === 'behavior' ? 'ประเมินพฤติกรรมหมอนวด' : 'ประเมินความรับผิดชอบในที่ทำงาน'}
-                </h2>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-                  {activeCategory === 'behavior'
-                    ? `ได้รับสุ่มประเมินหมอนวดจำนวน ${totalToEvaluate} คน (คะแนน 1-10)`
-                    : `ประเมินหมอนวดทั้งหมด ${totalToEvaluate} คน (คะแนน 1-10) คะแนนจะถูกนำไปเฉลี่ยร่วมกับเจ้าหน้าที่ทุกท่าน`
-                  }
-                </p>
-              </div>
+      {/* Masseuses 2-Criteria Evaluation Cards Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: '20px' }}>
+        {filteredList.map(m => {
+          const evalItem = userBehaviorEvals[m.id];
+          let welcomeScore = null;
+          let groomingScore = null;
 
-              {/* Progress Count Pill */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 700, color: progressPercent === 100 ? 'var(--accent-teal)' : 'var(--text-primary)' }}>
-                    {completedCount} / {totalToEvaluate}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    ประเมินแล้ว ({progressPercent}%)
-                  </div>
-                </div>
+          if (evalItem !== undefined && evalItem !== null) {
+            if (typeof evalItem === 'number') {
+              welcomeScore = evalItem;
+              groomingScore = evalItem;
+            } else if (typeof evalItem === 'object') {
+              welcomeScore = evalItem.welcome ?? null;
+              groomingScore = evalItem.grooming ?? null;
+            }
+          }
 
-                {progressPercent === 100 && (
+          const hasWelcome = welcomeScore !== null;
+          const hasGrooming = groomingScore !== null;
+          const isFullyRated = hasWelcome && hasGrooming;
+          const avgScore = isFullyRated
+            ? Math.round(((welcomeScore + groomingScore) / 2) * 10) / 10
+            : (hasWelcome ? welcomeScore : (hasGrooming ? groomingScore : null));
+
+          return (
+            <div
+              key={m.id}
+              className="glass-panel"
+              style={{
+                padding: '24px',
+                borderRadius: '20px',
+                borderColor: isFullyRated ? 'rgba(20, 184, 166, 0.5)' : 'var(--border-color)',
+                boxShadow: isFullyRated ? '0 10px 30px rgba(20, 184, 166, 0.1)' : 'none',
+                opacity: isClosed && currentUser.role !== 'admin' ? 0.75 : 1,
+                transition: 'all 0.2s ease'
+              }}
+            >
+              {/* Card Header: Masseuse Info & Status Badge */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                   <div style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '50%',
-                    background: 'rgba(20, 184, 166, 0.2)',
-                    color: '#2dd4bf',
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '14px',
+                    background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    fontWeight: 700,
+                    fontSize: '1.1rem',
+                    color: '#fff',
+                    boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
                   }}>
-                    <CheckCircle2 size={24} />
+                    {m.name.charAt(2) || m.name.charAt(0)}
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* Progress Bar */}
-            <div style={{ height: '8px', width: '100%', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%',
-                width: `${progressPercent}%`,
-                background: 'linear-gradient(90deg, #14b8a6, #8b5cf6)',
-                borderRadius: '4px',
-                transition: 'width 0.4s ease'
-              }} />
-            </div>
-          </div>
-
-          {/* Search & Filters */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
-            <div style={{ position: 'relative', width: '280px' }}>
-              <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input
-                type="text"
-                className="input-field"
-                style={{ paddingLeft: '38px' }}
-                placeholder="ค้นหาชื่อ หรือรหัสหมอนวด..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('all')}
-                className={`btn ${statusFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ padding: '6px 14px', fontSize: '0.85rem' }}
-              >
-                ทั้งหมด ({totalToEvaluate})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('pending')}
-                className={`btn ${statusFilter === 'pending' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ padding: '6px 14px', fontSize: '0.85rem' }}
-              >
-                ยังไม่ได้ประเมิน ({totalToEvaluate - completedCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('completed')}
-                className={`btn ${statusFilter === 'completed' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ padding: '6px 14px', fontSize: '0.85rem' }}
-              >
-                ประเมินแล้ว ({completedCount})
-              </button>
-            </div>
-          </div>
-
-          {/* Masseuses Evaluation Cards Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '16px' }}>
-            {filteredList.map(m => {
-              const currentScore = userCategoryEvals[m.id] ?? null;
-              const isRated = currentScore !== null;
-
-              return (
-                <div
-                  key={m.id}
-                  className="glass-panel glass-card-interactive"
-                  style={{
-                    padding: '20px',
-                    borderColor: isRated ? 'rgba(20, 184, 166, 0.4)' : 'var(--border-color)',
-                    opacity: isClosed && currentUser.role !== 'admin' ? 0.75 : 1
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{
-                        width: '44px',
-                        height: '44px',
-                        borderRadius: '12px',
-                        background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 700,
-                        fontSize: '1rem',
-                        color: '#fff',
-                        boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
-                      }}>
-                        {m.name.charAt(2) || m.name.charAt(0)}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
-                          {m.name}
-                        </div>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                          รหัส: {m.code}
-                        </div>
-                      </div>
-                    </div>
-
-                    {isRated ? (
-                      <span className="badge badge-teal">
-                        <Check size={14} /> ประเมินแล้ว ({currentScore}/10)
-                      </span>
-                    ) : (
-                      <span className="badge badge-gray">
-                        รอประเมิน
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Rating 1 - 10 Score Selector */}
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                        ให้คะแนน (1 - 10):
-                      </span>
-                      {currentScore !== null && (
-                        <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--accent-teal)' }}>
-                          {currentScore} คะแนน
-                        </span>
-                      )}
+                    <div style={{ fontWeight: 700, fontSize: '1.15rem', color: 'var(--text-primary)' }}>
+                      {m.name}
                     </div>
-
-                    {/* 1 - 10 Buttons */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '4px' }}>
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(scoreNum => {
-                        const isSelected = currentScore === scoreNum;
-                        return (
-                          <button
-                            key={scoreNum}
-                            type="button"
-                            disabled={isClosed && currentUser.role !== 'admin'}
-                            onClick={() => handleScoreChange(activeCategory, m.id, scoreNum)}
-                            className={`rating-button ${isSelected ? 'active' : ''}`}
-                            style={{
-                              width: '100%',
-                              height: '34px',
-                              fontSize: '0.85rem',
-                              cursor: isClosed && currentUser.role !== 'admin' ? 'not-allowed' : 'pointer',
-                              opacity: isClosed && currentUser.role !== 'admin' ? 0.6 : 1
-                            }}
-                          >
-                            {scoreNum}
-                          </button>
-                        );
-                      })}
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                      รหัส: <strong>{m.code}</strong>
                     </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
 
-          {filteredList.length === 0 && (
-            <div className="glass-panel" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              ไม่พบรายชื่อหมอนวดตามเงื่อนไขการค้นหา
+                {isFullyRated ? (
+                  <div style={{ textAlign: 'right' }}>
+                    <span className="badge badge-teal" style={{ padding: '6px 12px', fontSize: '0.82rem' }}>
+                      <Check size={14} /> ครบ 2 ข้อ (เฉลี่ย {avgScore})
+                    </span>
+                  </div>
+                ) : (hasWelcome || hasGrooming) ? (
+                  <span className="badge badge-gold" style={{ padding: '6px 12px', fontSize: '0.82rem' }}>
+                    ทำแล้ว 1/2 ข้อ
+                  </span>
+                ) : (
+                  <span className="badge badge-gray" style={{ padding: '6px 12px', fontSize: '0.82rem' }}>
+                    รอประเมิน
+                  </span>
+                )}
+              </div>
+
+              {/* Sub-Criteria 2.1: Welcome & Care */}
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    <HeartHandshake size={16} color="#a78bfa" />
+                    <span>2.1 การต้อนรับ ดูแลผู้มารับบริการ</span>
+                  </div>
+                  {welcomeScore !== null ? (
+                    <span style={{ fontSize: '0.92rem', fontWeight: 700, color: '#a78bfa' }}>
+                      {welcomeScore} / 10
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>ยังไม่ได้ลงคะแนน</span>
+                  )}
+                </div>
+
+                {/* 1 - 10 Buttons for 2.1 */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '4px' }}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(scoreNum => {
+                    const isSelected = welcomeScore === scoreNum;
+                    return (
+                      <button
+                        key={scoreNum}
+                        type="button"
+                        disabled={isClosed && currentUser.role !== 'admin'}
+                        onClick={() => handleSubScoreChange(m.id, 'welcome', scoreNum)}
+                        className={`rating-button ${isSelected ? 'active' : ''}`}
+                        style={{
+                          width: '100%',
+                          height: '34px',
+                          fontSize: '0.85rem',
+                          background: isSelected ? 'linear-gradient(135deg, #8b5cf6, #6d28d9)' : undefined,
+                          borderColor: isSelected ? '#8b5cf6' : undefined,
+                          cursor: isClosed && currentUser.role !== 'admin' ? 'not-allowed' : 'pointer',
+                          opacity: isClosed && currentUser.role !== 'admin' ? 0.6 : 1
+                        }}
+                      >
+                        {scoreNum}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Sub-Criteria 2.2: Grooming & Uniform */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    <Shirt size={16} color="#2dd4bf" />
+                    <span>2.2 การแต่งกาย สุภาพเรียบร้อย เหมาะสม</span>
+                  </div>
+                  {groomingScore !== null ? (
+                    <span style={{ fontSize: '0.92rem', fontWeight: 700, color: '#2dd4bf' }}>
+                      {groomingScore} / 10
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>ยังไม่ได้ลงคะแนน</span>
+                  )}
+                </div>
+
+                {/* 1 - 10 Buttons for 2.2 */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '4px' }}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(scoreNum => {
+                    const isSelected = groomingScore === scoreNum;
+                    return (
+                      <button
+                        key={scoreNum}
+                        type="button"
+                        disabled={isClosed && currentUser.role !== 'admin'}
+                        onClick={() => handleSubScoreChange(m.id, 'grooming', scoreNum)}
+                        className={`rating-button ${isSelected ? 'active' : ''}`}
+                        style={{
+                          width: '100%',
+                          height: '34px',
+                          fontSize: '0.85rem',
+                          background: isSelected ? 'linear-gradient(135deg, #14b8a6, #0d9488)' : undefined,
+                          borderColor: isSelected ? '#14b8a6' : undefined,
+                          cursor: isClosed && currentUser.role !== 'admin' ? 'not-allowed' : 'pointer',
+                          opacity: isClosed && currentUser.role !== 'admin' ? 0.6 : 1
+                        }}
+                      >
+                        {scoreNum}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          )}
+          );
+        })}
+      </div>
+
+      {filteredList.length === 0 && (
+        <div className="glass-panel" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: '20px' }}>
+          ไม่พบรายชื่อหมอนวดในกลุ่มที่ได้รับมอบหมายตามเงื่อนไขการค้นหา
         </div>
       )}
 
