@@ -10,10 +10,14 @@ export default function LoginModal({ onLogin }) {
   const [cloudSynced, setCloudSynced] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     // Pull latest accounts from cloud database when login modal opens
     pullFromCloud().then(success => {
-      setCloudSynced(success);
+      if (isMounted) setCloudSynced(success);
     });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleManualSubmit = async (e) => {

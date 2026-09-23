@@ -148,7 +148,7 @@ export default function EvaluationView({ currentUser }) {
   const checkCompletion = (currentEvals) => {
     const userBehavior = currentEvals[currentUser.id]?.behavior || {};
     const assignedIds = assignments[currentUser.id] || [];
-    const targetIds = Array.from(new Set([...assignedIds, ...Object.keys(userBehavior)]));
+    const targetIds = assignedIds;
     
     const isAllDone = targetIds.length > 0 && targetIds.every(id => {
       const evalItem = userBehavior[id];
