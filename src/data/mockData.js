@@ -98,9 +98,13 @@ const STORAGE_KEYS = {
   SETTINGS: 'masseuse_app_system_settings_v1'
 };
 
-// --- Cloud Sync Realtime Database Integration ---
-const CLOUD_OBJECT_ID = 'ff808181a09d98f701a0cd12238d7765';
-const CLOUD_API_URL = `https://api.restful-api.dev/objects/${CLOUD_OBJECT_ID}`;
+// --- Cloud Sync Realtime Serverless Integration ---
+function getCloudApiUrl() {
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    return `${window.location.origin}/api/sync`;
+  }
+  return 'https://score-gules.vercel.app/api/sync';
+}
 
 let isPullingCloud = false;
 
@@ -108,7 +112,7 @@ export async function pullFromCloud() {
   if (isPullingCloud) return false;
   isPullingCloud = true;
   try {
-    const res = await fetch(CLOUD_API_URL);
+    const res = await fetch(getCloudApiUrl());
     if (!res.ok) throw new Error('Cloud fetch error');
     const result = await res.json();
     const data = result.data;
@@ -148,19 +152,16 @@ export async function pullFromCloud() {
 export async function pushToCloud() {
   try {
     const payload = {
-      name: 'votekmr_production_store_v2',
-      data: {
-        customStaff: getCustomStaff(),
-        staffOverrides: getStaffOverrides(),
-        customMasseuses: getCustomMasseuses(),
-        masseuseOverrides: getMasseuseOverrides(),
-        evaluations: getEvaluations(),
-        settings: getSystemSettings(),
-        assignments: getBehaviorAssignments()
-      }
+      customStaff: getCustomStaff(),
+      staffOverrides: getStaffOverrides(),
+      customMasseuses: getCustomMasseuses(),
+      masseuseOverrides: getMasseuseOverrides(),
+      evaluations: getEvaluations(),
+      settings: getSystemSettings(),
+      assignments: getBehaviorAssignments()
     };
-    await fetch(CLOUD_API_URL, {
-      method: 'PUT',
+    await fetch(getCloudApiUrl(), {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
@@ -268,7 +269,6 @@ export function getStaffUsers() {
 }
 
 export function saveStaffUsers(list) {
-  // Extract custom staff and overrides
   const initialIds = new Set(INITIAL_STAFF_USERS.map(s => s.id));
   const customStaff = list.filter(s => !initialIds.has(s.id));
   
@@ -288,7 +288,7 @@ export function addStaffUser({ name, username, password, role, isBehaviorEvaluat
   const newStaff = {
     id: `staff_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     name,
-    username,
+    username: username.trim().toLowerCase(),
     password: password || 'password123',
     role: role || 'staff',
     isBehaviorEvaluator: Boolean(isBehaviorEvaluator),
@@ -474,7 +474,7 @@ export function generateBehaviorAssignments() {
 }
 
 export function getBehaviorAssignments() {
-  const stored = localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS);
+  const stored = localStorage.setItem ? localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS) : null;
   if (stored) {
     try {
       return JSON.parse(stored);
