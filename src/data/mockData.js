@@ -89,10 +89,12 @@ export const INITIAL_MASSEUSES = Array.from({ length: 30 }, (_, index) => {
 // Storage Keys
 const STORAGE_KEYS = {
   CURRENT_USER: 'masseuse_app_current_user',
-  STAFF_USERS: 'masseuse_app_staff_users_v4',
+  CUSTOM_STAFF: 'masseuse_app_custom_staff_v1',
+  STAFF_OVERRIDES: 'masseuse_app_staff_overrides_v1',
+  CUSTOM_MASSEUSES: 'masseuse_app_custom_masseuses_v1',
+  MASSEUSE_OVERRIDES: 'masseuse_app_masseuse_overrides_v1',
   ASSIGNMENTS: 'masseuse_app_behavior_assignments',
   EVALUATIONS: 'masseuse_app_evaluations_v1',
-  MASSEUSES: 'masseuse_app_masseuses_list_v1',
   SETTINGS: 'masseuse_app_system_settings_v1'
 };
 
@@ -112,11 +114,17 @@ export async function pullFromCloud() {
     const data = result.data;
 
     if (data) {
-      if (Array.isArray(data.staff) && data.staff.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.STAFF_USERS, JSON.stringify(data.staff));
+      if (Array.isArray(data.customStaff)) {
+        localStorage.setItem(STORAGE_KEYS.CUSTOM_STAFF, JSON.stringify(data.customStaff));
       }
-      if (Array.isArray(data.masseuses) && data.masseuses.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.MASSEUSES, JSON.stringify(data.masseuses));
+      if (data.staffOverrides && typeof data.staffOverrides === 'object') {
+        localStorage.setItem(STORAGE_KEYS.STAFF_OVERRIDES, JSON.stringify(data.staffOverrides));
+      }
+      if (Array.isArray(data.customMasseuses)) {
+        localStorage.setItem(STORAGE_KEYS.CUSTOM_MASSEUSES, JSON.stringify(data.customMasseuses));
+      }
+      if (data.masseuseOverrides && typeof data.masseuseOverrides === 'object') {
+        localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify(data.masseuseOverrides));
       }
       if (data.evaluations && typeof data.evaluations === 'object') {
         localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(data.evaluations));
@@ -140,10 +148,12 @@ export async function pullFromCloud() {
 export async function pushToCloud() {
   try {
     const payload = {
-      name: 'votekmr_production_store_v1',
+      name: 'votekmr_production_store_v2',
       data: {
-        staff: getStaffUsers(),
-        masseuses: getMasseuses(),
+        customStaff: getCustomStaff(),
+        staffOverrides: getStaffOverrides(),
+        customMasseuses: getCustomMasseuses(),
+        masseuseOverrides: getMasseuseOverrides(),
         evaluations: getEvaluations(),
         settings: getSystemSettings(),
         assignments: getBehaviorAssignments()
@@ -157,6 +167,40 @@ export async function pushToCloud() {
   } catch (err) {
     console.warn('Cloud push warning:', err);
   }
+}
+
+// --- Internal Helper Getters/Setters ---
+
+function getCustomStaff() {
+  const stored = localStorage.getItem(STORAGE_KEYS.CUSTOM_STAFF);
+  if (stored) {
+    try { return JSON.parse(stored); } catch (e) {}
+  }
+  return [];
+}
+
+function getStaffOverrides() {
+  const stored = localStorage.getItem(STORAGE_KEYS.STAFF_OVERRIDES);
+  if (stored) {
+    try { return JSON.parse(stored); } catch (e) {}
+  }
+  return {};
+}
+
+function getCustomMasseuses() {
+  const stored = localStorage.getItem(STORAGE_KEYS.CUSTOM_MASSEUSES);
+  if (stored) {
+    try { return JSON.parse(stored); } catch (e) {}
+  }
+  return [];
+}
+
+function getMasseuseOverrides() {
+  const stored = localStorage.getItem(STORAGE_KEYS.MASSEUSE_OVERRIDES);
+  if (stored) {
+    try { return JSON.parse(stored); } catch (e) {}
+  }
+  return {};
 }
 
 // --- System Settings & Evaluation Deadline ---
@@ -198,25 +242,49 @@ export function isEvaluationClosed() {
 // --- Staff Management Utilities ---
 
 export function getStaffUsers() {
-  const stored = localStorage.getItem(STORAGE_KEYS.STAFF_USERS);
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch (e) {
-      console.error('Failed to parse staff users:', e);
+  const customStaff = getCustomStaff();
+  const staffOverrides = getStaffOverrides();
+
+  // Merge INITIAL_STAFF_USERS with overrides
+  const baseStaff = INITIAL_STAFF_USERS.map(s => {
+    if (staffOverrides[s.id]) {
+      return { ...s, ...staffOverrides[s.id] };
     }
-  }
-  return INITIAL_STAFF_USERS;
+    return s;
+  });
+
+  // Filter out deleted base staff if deleted in overrides
+  const activeBaseStaff = baseStaff.filter(s => !staffOverrides[s.id]?.isDeleted);
+
+  // Merge custom staff with overrides
+  const activeCustomStaff = customStaff.map(s => {
+    if (staffOverrides[s.id]) {
+      return { ...s, ...staffOverrides[s.id] };
+    }
+    return s;
+  }).filter(s => !s.isDeleted);
+
+  return [...activeBaseStaff, ...activeCustomStaff];
 }
 
 export function saveStaffUsers(list) {
-  localStorage.setItem(STORAGE_KEYS.STAFF_USERS, JSON.stringify(list));
+  // Extract custom staff and overrides
+  const initialIds = new Set(INITIAL_STAFF_USERS.map(s => s.id));
+  const customStaff = list.filter(s => !initialIds.has(s.id));
+  
+  const overrides = {};
+  list.forEach(s => {
+    overrides[s.id] = s;
+  });
+
+  localStorage.setItem(STORAGE_KEYS.CUSTOM_STAFF, JSON.stringify(customStaff));
+  localStorage.setItem(STORAGE_KEYS.STAFF_OVERRIDES, JSON.stringify(overrides));
   pushToCloud();
   return list;
 }
 
 export function addStaffUser({ name, username, password, role, isBehaviorEvaluator, canViewDashboard }) {
-  const currentList = getStaffUsers();
+  const currentCustom = getCustomStaff();
   const newStaff = {
     id: `staff_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     name,
@@ -228,15 +296,22 @@ export function addStaffUser({ name, username, password, role, isBehaviorEvaluat
     title: role === 'admin' ? 'เจ้าหน้าที่ (Admin / ผู้ดูแลระบบ)' : 'เจ้าหน้าที่',
     avatarColor: role === 'admin' ? 'from-amber-500 to-red-500' : 'from-blue-500 to-indigo-600'
   };
-  const updated = [...currentList, newStaff];
-  saveStaffUsers(updated);
+
+  const updatedCustom = [...currentCustom, newStaff];
+  localStorage.setItem(STORAGE_KEYS.CUSTOM_STAFF, JSON.stringify(updatedCustom));
+  
+  const overrides = getStaffOverrides();
+  overrides[newStaff.id] = newStaff;
+  localStorage.setItem(STORAGE_KEYS.STAFF_OVERRIDES, JSON.stringify(overrides));
+
+  pushToCloud();
   generateBehaviorAssignments();
-  return updated;
+  return getStaffUsers();
 }
 
 export function updateStaffUser(id, updatedFields) {
-  const currentList = getStaffUsers();
-  const updated = currentList.map(s => {
+  const allStaff = getStaffUsers();
+  const updatedList = allStaff.map(s => {
     if (s.id === id) {
       const merged = { ...s, ...updatedFields };
       if (merged.role === 'admin') merged.canViewDashboard = true;
@@ -245,58 +320,96 @@ export function updateStaffUser(id, updatedFields) {
     }
     return s;
   });
-  saveStaffUsers(updated);
+
+  saveStaffUsers(updatedList);
   generateBehaviorAssignments();
-  return updated;
+  return updatedList;
 }
 
 export function deleteStaffUser(id) {
-  const currentList = getStaffUsers();
-  const updated = currentList.filter(s => s.id !== id);
-  saveStaffUsers(updated);
+  const allStaff = getStaffUsers();
+  const initialIds = new Set(INITIAL_STAFF_USERS.map(s => s.id));
+
+  if (initialIds.has(id)) {
+    const overrides = getStaffOverrides();
+    overrides[id] = { ...overrides[id], isDeleted: true };
+    localStorage.setItem(STORAGE_KEYS.STAFF_OVERRIDES, JSON.stringify(overrides));
+  } else {
+    const currentCustom = getCustomStaff().filter(s => s.id !== id);
+    localStorage.setItem(STORAGE_KEYS.CUSTOM_STAFF, JSON.stringify(currentCustom));
+  }
+
+  pushToCloud();
   generateBehaviorAssignments();
-  return updated;
+  return getStaffUsers();
 }
 
 // --- Masseuses Management Utilities ---
 
 export function getMasseuses() {
-  const stored = localStorage.getItem(STORAGE_KEYS.MASSEUSES);
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch (e) {
-      console.error('Failed to parse masseuses list:', e);
+  const customMasseuses = getCustomMasseuses();
+  const masseuseOverrides = getMasseuseOverrides();
+
+  const baseMasseuses = INITIAL_MASSEUSES.map(m => {
+    if (masseuseOverrides[m.id]) {
+      return { ...m, ...masseuseOverrides[m.id] };
     }
-  }
-  return INITIAL_MASSEUSES;
+    return m;
+  }).filter(m => !m.isDeleted);
+
+  const activeCustom = customMasseuses.map(m => {
+    if (masseuseOverrides[m.id]) {
+      return { ...m, ...masseuseOverrides[m.id] };
+    }
+    return m;
+  }).filter(m => !m.isDeleted);
+
+  return [...baseMasseuses, ...activeCustom];
 }
 
 export function saveMasseuses(list) {
-  localStorage.setItem(STORAGE_KEYS.MASSEUSES, JSON.stringify(list));
+  const initialIds = new Set(INITIAL_MASSEUSES.map(m => m.id));
+  const customMasseuses = list.filter(m => !initialIds.has(m.id));
+
+  const overrides = {};
+  list.forEach(m => {
+    overrides[m.id] = m;
+  });
+
+  localStorage.setItem(STORAGE_KEYS.CUSTOM_MASSEUSES, JSON.stringify(customMasseuses));
+  localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify(overrides));
   pushToCloud();
   return list;
 }
 
 export function addMasseuse(name, code) {
-  const currentList = getMasseuses();
-  const nextNum = currentList.length + 1;
+  const currentCustom = getCustomMasseuses();
+  const allCurrent = getMasseuses();
+  const nextNum = allCurrent.length + 1;
   const numStr = nextNum.toString().padStart(2, '0');
+  
   const newMasseuse = {
     id: `m_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     code: code || `MN-${numStr}`,
     name: name || `หมอนวด ${numStr}`,
     avatarSeed: nextNum
   };
-  const updatedList = [...currentList, newMasseuse];
-  saveMasseuses(updatedList);
+
+  const updatedCustom = [...currentCustom, newMasseuse];
+  localStorage.setItem(STORAGE_KEYS.CUSTOM_MASSEUSES, JSON.stringify(updatedCustom));
+  
+  const overrides = getMasseuseOverrides();
+  overrides[newMasseuse.id] = newMasseuse;
+  localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify(overrides));
+
+  pushToCloud();
   generateBehaviorAssignments();
-  return updatedList;
+  return getMasseuses();
 }
 
 export function updateMasseuse(id, newName, newCode) {
-  const currentList = getMasseuses();
-  const updatedList = currentList.map(m => {
+  const allCurrent = getMasseuses();
+  const updatedList = allCurrent.map(m => {
     if (m.id === id) {
       return { ...m, name: newName, code: newCode };
     }
@@ -307,11 +420,20 @@ export function updateMasseuse(id, newName, newCode) {
 }
 
 export function deleteMasseuse(id) {
-  const currentList = getMasseuses();
-  const updatedList = currentList.filter(m => m.id !== id);
-  saveMasseuses(updatedList);
+  const initialIds = new Set(INITIAL_MASSEUSES.map(m => m.id));
+
+  if (initialIds.has(id)) {
+    const overrides = getMasseuseOverrides();
+    overrides[id] = { ...overrides[id], isDeleted: true };
+    localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify(overrides));
+  } else {
+    const currentCustom = getCustomMasseuses().filter(m => m.id !== id);
+    localStorage.setItem(STORAGE_KEYS.CUSTOM_MASSEUSES, JSON.stringify(currentCustom));
+  }
+
+  pushToCloud();
   generateBehaviorAssignments();
-  return updatedList;
+  return getMasseuses();
 }
 
 // Fisher-Yates Shuffle algorithm
@@ -566,8 +688,10 @@ export function resetEvaluationsOnly() {
 // Clear all data
 export function resetAllData() {
   localStorage.removeItem(STORAGE_KEYS.EVALUATIONS);
-  localStorage.removeItem(STORAGE_KEYS.MASSEUSES);
-  localStorage.removeItem(STORAGE_KEYS.STAFF_USERS);
+  localStorage.removeItem(STORAGE_KEYS.CUSTOM_MASSEUSES);
+  localStorage.removeItem(STORAGE_KEYS.MASSEUSE_OVERRIDES);
+  localStorage.removeItem(STORAGE_KEYS.CUSTOM_STAFF);
+  localStorage.removeItem(STORAGE_KEYS.STAFF_OVERRIDES);
   localStorage.removeItem(STORAGE_KEYS.SETTINGS);
   generateBehaviorAssignments();
   pushToCloud();
