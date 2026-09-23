@@ -96,6 +96,69 @@ const STORAGE_KEYS = {
   SETTINGS: 'masseuse_app_system_settings_v1'
 };
 
+// --- Cloud Sync Realtime Database Integration ---
+const CLOUD_OBJECT_ID = 'ff808181a09d98f701a0cd12238d7765';
+const CLOUD_API_URL = `https://api.restful-api.dev/objects/${CLOUD_OBJECT_ID}`;
+
+let isPullingCloud = false;
+
+export async function pullFromCloud() {
+  if (isPullingCloud) return false;
+  isPullingCloud = true;
+  try {
+    const res = await fetch(CLOUD_API_URL);
+    if (!res.ok) throw new Error('Cloud fetch error');
+    const result = await res.json();
+    const data = result.data;
+
+    if (data) {
+      if (Array.isArray(data.staff) && data.staff.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.STAFF_USERS, JSON.stringify(data.staff));
+      }
+      if (Array.isArray(data.masseuses) && data.masseuses.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.MASSEUSES, JSON.stringify(data.masseuses));
+      }
+      if (data.evaluations && typeof data.evaluations === 'object') {
+        localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(data.evaluations));
+      }
+      if (data.settings && typeof data.settings === 'object') {
+        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(data.settings));
+      }
+      if (data.assignments && typeof data.assignments === 'object') {
+        localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(data.assignments));
+      }
+    }
+    isPullingCloud = false;
+    return true;
+  } catch (err) {
+    console.warn('Cloud pull warning:', err);
+    isPullingCloud = false;
+    return false;
+  }
+}
+
+export async function pushToCloud() {
+  try {
+    const payload = {
+      name: 'votekmr_production_store_v1',
+      data: {
+        staff: getStaffUsers(),
+        masseuses: getMasseuses(),
+        evaluations: getEvaluations(),
+        settings: getSystemSettings(),
+        assignments: getBehaviorAssignments()
+      }
+    };
+    await fetch(CLOUD_API_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    console.warn('Cloud push warning:', err);
+  }
+}
+
 // --- System Settings & Evaluation Deadline ---
 
 export function getSystemSettings() {
@@ -117,6 +180,7 @@ export function saveSystemSettings(settings) {
   const current = getSystemSettings();
   const updated = { ...current, ...settings };
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
+  pushToCloud();
   return updated;
 }
 
@@ -147,6 +211,7 @@ export function getStaffUsers() {
 
 export function saveStaffUsers(list) {
   localStorage.setItem(STORAGE_KEYS.STAFF_USERS, JSON.stringify(list));
+  pushToCloud();
   return list;
 }
 
@@ -209,6 +274,7 @@ export function getMasseuses() {
 
 export function saveMasseuses(list) {
   localStorage.setItem(STORAGE_KEYS.MASSEUSES, JSON.stringify(list));
+  pushToCloud();
   return list;
 }
 
@@ -268,6 +334,7 @@ export function generateBehaviorAssignments() {
   const assignments = {};
   if (behaviorEvaluators.length === 0) {
     localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments));
+    pushToCloud();
     return assignments;
   }
 
@@ -280,6 +347,7 @@ export function generateBehaviorAssignments() {
   });
 
   localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments));
+  pushToCloud();
   return assignments;
 }
 
@@ -320,6 +388,7 @@ export function saveSingleScore(staffId, category, masseuseId, score) {
   }
   allEvals[staffId][category][masseuseId] = Number(score);
   localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(allEvals));
+  pushToCloud();
   return allEvals;
 }
 
@@ -336,6 +405,7 @@ export function saveStaffEvaluations(staffId, category, scoresMap) {
     ...scoresMap
   };
   localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(allEvals));
+  pushToCloud();
   return allEvals;
 }
 
@@ -482,6 +552,7 @@ export function seedMockEvaluations() {
   });
 
   localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(mockEvals));
+  pushToCloud();
   return mockEvals;
 }
 
@@ -489,6 +560,7 @@ export function seedMockEvaluations() {
 export function resetEvaluationsOnly() {
   localStorage.removeItem(STORAGE_KEYS.EVALUATIONS);
   generateBehaviorAssignments();
+  pushToCloud();
 }
 
 // Clear all data
@@ -498,4 +570,5 @@ export function resetAllData() {
   localStorage.removeItem(STORAGE_KEYS.STAFF_USERS);
   localStorage.removeItem(STORAGE_KEYS.SETTINGS);
   generateBehaviorAssignments();
+  pushToCloud();
 }

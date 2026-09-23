@@ -1,15 +1,29 @@
-import React, { useState } from 'react';
-import { getStaffUsers } from '../data/mockData';
-import { Lock, User, KeyRound, Sparkles, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { getStaffUsers, pullFromCloud } from '../data/mockData';
+import { Lock, User, KeyRound, Sparkles, AlertCircle, CloudCheck, RefreshCw } from 'lucide-react';
 
 export default function LoginModal({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [cloudSynced, setCloudSynced] = useState(false);
 
-  const handleManualSubmit = (e) => {
+  useEffect(() => {
+    // Pull latest accounts from cloud database when login modal opens
+    pullFromCloud().then(success => {
+      setCloudSynced(success);
+    });
+  }, []);
+
+  const handleManualSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
+
+    // Pull cloud data right before checking login credentials to ensure multi-device sync
+    await pullFromCloud();
+    setIsLoading(false);
 
     const currentStaffList = getStaffUsers();
     const foundUser = currentStaffList.find(
@@ -56,9 +70,14 @@ export default function LoginModal({ onLogin }) {
           <h1 style={{ fontSize: '1.6rem', fontWeight: 700, margin: '0 0 6px 0', letterSpacing: '-0.5px' }}>
             ระบบประเมินหมอนวด
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '10px' }}>
             กรุณาเข้าสู่ระบบด้วยบัญชีเจ้าหน้าที่ประจำการ
           </p>
+
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.76rem', color: '#2dd4bf', background: 'rgba(20, 184, 166, 0.12)', padding: '4px 10px', borderRadius: '9999px', border: '1px solid rgba(20, 184, 166, 0.3)' }}>
+            <CloudCheck size={14} />
+            <span>เชื่อมต่อฐานข้อมูล Cloud (Realtime Sync)</span>
+          </div>
         </div>
 
         {/* Login Form */}
@@ -116,9 +135,14 @@ export default function LoginModal({ onLogin }) {
             </div>
           )}
 
-          <button type="submit" className="btn btn-primary" style={{ padding: '14px', marginTop: '6px', fontSize: '1rem' }}>
-            <Lock size={18} />
-            เข้าสู่ระบบ
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="btn btn-primary"
+            style={{ padding: '14px', marginTop: '6px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+          >
+            {isLoading ? <RefreshCw size={18} className="animate-spin" /> : <Lock size={18} />}
+            {isLoading ? 'กำลังตรวจสอบ...' : 'เข้าสู่ระบบ'}
           </button>
         </form>
 

@@ -3,14 +3,23 @@ import Navbar from './components/Navbar';
 import LoginModal from './components/LoginModal';
 import EvaluationView from './components/EvaluationView';
 import AdminDashboard from './components/AdminDashboard';
+import { pullFromCloud } from './data/mockData';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('evaluation');
   const [theme, setTheme] = useState('dark');
 
-  // Auto restore user session or load default theme
+  // Auto restore user session and pull Cloud DB data
   useEffect(() => {
+    // Initial Cloud Database Pull
+    pullFromCloud();
+
+    // Setup Realtime Cloud Sync Polling every 8 seconds
+    const interval = setInterval(() => {
+      pullFromCloud();
+    }, 8000);
+
     const savedUserJson = localStorage.getItem('masseuse_app_current_user');
     if (savedUserJson) {
       try {
@@ -27,6 +36,8 @@ export default function App() {
     const savedTheme = localStorage.getItem('masseuse_app_theme') || 'dark';
     setTheme(savedTheme);
     document.documentElement.setAttribute('data-theme', savedTheme);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleLogin = (user) => {
