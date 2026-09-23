@@ -52,6 +52,7 @@ import {
   HeartHandshake,
   Shirt
 } from 'lucide-react';
+import ImportExportModal from './ImportExportModal';
 
 export default function AdminDashboard({ currentUser, onSettingsChange }) {
   const isAdmin = currentUser.role === 'admin';
@@ -72,6 +73,8 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
   const [isManageMasseuseModalOpen, setIsManageMasseuseModalOpen] = useState(false);
   const [isManageStaffModalOpen, setIsManageStaffModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
+
 
   // Masseuse Form State
   const [newMasseuseName, setNewMasseuseName] = useState('');
@@ -528,6 +531,17 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                 >
                   <UserPlus size={16} />
                   จัดการรายชื่อหมอนวด ({totalMasseuses} คน)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsImportExportModalOpen(true)}
+                  className="btn btn-primary"
+                  style={{ fontSize: '0.88rem', background: 'linear-gradient(135deg, #0284c7, #2563eb)' }}
+                  title="นำเข้าหรือส่งออกรายชื่อหมอนวด (CSV, JSON, คัดลอก-วางรายชื่อ)"
+                >
+                  <FileSpreadsheet size={16} />
+                  นำเข้า / ส่งออกรายชื่อ (Import/Export)
                 </button>
                 
                 <button type="button" onClick={handleSeedDemo} className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>
@@ -1469,14 +1483,29 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                   จัดการรายชื่อหมอนวด (Admin)
                 </h3>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsManageMasseuseModalOpen(false)}
-                className="btn btn-secondary"
-                style={{ padding: '6px', borderRadius: '50%', width: '32px', height: '32px' }}
-              >
-                <X size={18} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsManageMasseuseModalOpen(false);
+                    setIsImportExportModalOpen(true);
+                  }}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.82rem', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <FileSpreadsheet size={14} />
+                  นำเข้า / ส่งออก (Import/Export)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsManageMasseuseModalOpen(false)}
+                  className="btn btn-secondary"
+                  style={{ padding: '6px', borderRadius: '50%', width: '32px', height: '32px' }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
             </div>
 
             <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
@@ -1637,6 +1666,18 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
         </div>
       )}
 
+      {/* IMPORT / EXPORT MASSEUSES MODAL */}
+      <ImportExportModal
+        isOpen={isImportExportModalOpen}
+        onClose={() => setIsImportExportModalOpen(false)}
+        masseuses={masseuses}
+        onSuccess={(msg) => {
+          loadDashboardData();
+          showNotice(msg);
+        }}
+      />
+
     </div>
   );
 }
+

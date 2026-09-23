@@ -507,6 +507,77 @@ export function deleteMasseuse(id) {
   return getMasseuses();
 }
 
+export function importMasseuses(newList, mode = 'append') {
+  if (!Array.isArray(newList) || newList.length === 0) {
+    throw new Error('ไม่พบข้อมูลรายชื่อหมอนวดที่จะนำเข้า');
+  }
+
+  const existingMasseuses = getMasseuses();
+
+  if (mode === 'replace') {
+    const overrides = getMasseuseOverrides();
+    // Mark existing masseuses as deleted so initial base and previous custom don't persist
+    existingMasseuses.forEach(m => {
+      overrides[m.id] = { ...(overrides[m.id] || m), isDeleted: true };
+    });
+    INITIAL_MASSEUSES.forEach(m => {
+      overrides[m.id] = { ...(overrides[m.id] || m), isDeleted: true };
+    });
+
+    const customList = newList.map((item, index) => {
+      const num = (index + 1).toString().padStart(2, '0');
+      const id = `m_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 6)}`;
+      const code = (item.code && item.code.trim()) || `MN-${num}`;
+      const name = (item.name || '').trim();
+      const mObj = {
+        id,
+        code,
+        name: name || `หมอนวด ${num}`,
+        avatarSeed: index + 1
+      };
+      overrides[id] = mObj;
+      return mObj;
+    });
+
+    localStorage.setItem(STORAGE_KEYS.CUSTOM_MASSEUSES, JSON.stringify(customList));
+    localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify(overrides));
+    localStorage.removeItem(STORAGE_KEYS.EVALUATIONS);
+
+    generateBehaviorAssignments();
+    pushToCloud();
+    return getMasseuses();
+  } else {
+    // Mode: append
+    const currentCustom = getCustomMasseuses();
+    const overrides = getMasseuseOverrides();
+    const baseCount = existingMasseuses.length;
+
+    const addedCustom = newList.map((item, index) => {
+      const num = (baseCount + index + 1).toString().padStart(2, '0');
+      const id = `m_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 6)}`;
+      const code = (item.code && item.code.trim()) || `MN-${num}`;
+      const name = (item.name || '').trim();
+      const mObj = {
+        id,
+        code,
+        name: name || `หมอนวด ${num}`,
+        avatarSeed: baseCount + index + 1
+      };
+      overrides[id] = mObj;
+      return mObj;
+    });
+
+    const updatedCustom = [...currentCustom, ...addedCustom];
+    localStorage.setItem(STORAGE_KEYS.CUSTOM_MASSEUSES, JSON.stringify(updatedCustom));
+    localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify(overrides));
+
+    generateBehaviorAssignments();
+    pushToCloud();
+    return getMasseuses();
+  }
+}
+
+
 // Fisher-Yates Shuffle algorithm
 function shuffleArray(array) {
   const arr = [...array];
