@@ -3,50 +3,50 @@
 export const EVALUATION_CRITERIA = [
   {
     key: 'welcome',
-    code: '2.1',
-    category: '2. พฤติกรรมบริการ',
+    code: '1.1',
+    category: '1. พฤติกรรมบริการ',
     title: 'การต้อนรับ ดูแลผู้มารับบริการ ตั้งแต่เริ่ม จบเสร็จสิ้นบริการ',
-    shortTitle: '2.1 การต้อนรับ ดูแลผู้มารับบริการ',
+    shortTitle: '1.1 การต้อนรับ ดูแลผู้มารับบริการ',
     description: 'การทักทาย ไหว้ ยิ้มแย้ม การเอาใจใส่สอบถามความต้องการ และการดูแลตลอดจนเสร็จสิ้นบริการ',
     color: '#a78bfa',
     gradient: 'linear-gradient(135deg, #8b5cf6, #6d28d9)'
   },
   {
     key: 'grooming',
-    code: '2.2',
-    category: '2. พฤติกรรมบริการ',
+    code: '1.2',
+    category: '1. พฤติกรรมบริการ',
     title: 'การแต่งกาย สุภาพเรียบร้อย เหมาะสม',
-    shortTitle: '2.2 การแต่งกาย สุภาพเรียบร้อย เหมาะสม',
+    shortTitle: '1.2 การแต่งกาย สุภาพเรียบร้อย เหมาะสม',
     description: 'ความสะอาดของชุดยูนิฟอร์ม ทรงผม ความเรียบร้อย ถูกสุขอนามัย และความเหมาะสม',
     color: '#2dd4bf',
     gradient: 'linear-gradient(135deg, #14b8a6, #0d9488)'
   },
   {
     key: 'responsibility',
-    code: '3.1',
-    category: '3. ความรับผิดชอบและการมีส่วนร่วม',
+    code: '2.1',
+    category: '2. ความรับผิดชอบและการมีส่วนร่วม',
     title: 'การรับผิดชอบต่องานที่ได้รับและหน้าที่',
-    shortTitle: '3.1 การรับผิดชอบต่องานที่ได้รับและหน้าที่',
+    shortTitle: '2.1 การรับผิดชอบต่องานที่ได้รับและหน้าที่',
     description: 'ความรับผิดชอบต่องานที่ได้รับมอบหมาย ตรงต่อเวลา และความใส่ใจในหน้าที่',
     color: '#38bdf8',
     gradient: 'linear-gradient(135deg, #0284c7, #2563eb)'
   },
   {
     key: 'volunteering',
-    code: '3.2',
-    category: '3. ความรับผิดชอบและการมีส่วนร่วม',
+    code: '2.2',
+    category: '2. ความรับผิดชอบและการมีส่วนร่วม',
     title: 'การมีจิตอาสาช่วยเหลือเพื่อนร่วมงาน หรือ จนท.',
-    shortTitle: '3.2 การมีจิตอาสาช่วยเหลือเพื่อนร่วมงาน หรือ จนท.',
+    shortTitle: '2.2 การมีจิตอาสาช่วยเหลือเพื่อนร่วมงาน หรือ จนท.',
     description: 'การมีจิตอาสาช่วยเหลือเกื้อกูลเพื่อนร่วมงาน หรือเจ้าหน้าที่ด้วยความเต็มใจ',
     color: '#fb7185',
     gradient: 'linear-gradient(135deg, #f43f5e, #be123c)'
   },
   {
     key: 'activity',
-    code: '3.3',
-    category: '3. ความรับผิดชอบและการมีส่วนร่วม',
+    code: '2.3',
+    category: '2. ความรับผิดชอบและการมีส่วนร่วม',
     title: 'การเข้าร่วมกิจกรรมหรือ งานของหน่วยงาน',
-    shortTitle: '3.3 การเข้าร่วมกิจกรรมหรือ งานของหน่วยงาน',
+    shortTitle: '2.3 การเข้าร่วมกิจกรรมหรือ งานของหน่วยงาน',
     description: 'การให้ความร่วมมือและเข้าร่วมกิจกรรมหรืองานต่างๆ ของหน่วยงานอย่างสม่ำเสมอ',
     color: '#facc15',
     gradient: 'linear-gradient(135deg, #eab308, #ca8a04)'
@@ -979,7 +979,7 @@ export function getStaffProgressReport() {
     const assignedIds = assignments[staff.id] || [];
     const behTotal = assignedIds.length;
 
-    // Completed if all 5 criteria (2.1, 2.2, 3.1, 3.2, 3.3) are evaluated
+    // Completed if all 5 criteria (1.1, 1.2, 2.1, 2.2, 2.3) are evaluated
     const behCompleted = assignedIds.filter(id => {
       const score = userEvals[id];
       if (score === null || score === undefined) return false;

@@ -331,7 +331,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
 
   const handleExportCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    csvContent += "อันดับ,รหัส,ชื่อหมอนวด,ผู้ประเมินพฤติกรรม,ข้อ 2.1 การต้อนรับ,ข้อ 2.2 การแต่งกาย,ข้อ 3.1 การรับผิดชอบต่องาน,ข้อ 3.2 จิตอาสาช่วยเหลือ,ข้อ 3.3 เข้าร่วมกิจกรรม,คะแนนรวมเฉลี่ย\n";
+    csvContent += "อันดับ,รหัส,ชื่อหมอนวด,ผู้ประเมินพฤติกรรม,ข้อ 1.1 การต้อนรับ,ข้อ 1.2 การแต่งกาย,ข้อ 2.1 การรับผิดชอบต่องาน,ข้อ 2.2 จิตอาสาช่วยเหลือ,ข้อ 2.3 เข้าร่วมกิจกรรม,คะแนนรวมเฉลี่ย\n";
 
     results.forEach(item => {
       const row = [
@@ -724,7 +724,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
         {/* Card 3: Avg Welcome Score */}
         <div className="glass-panel" style={{ padding: '20px' }}>
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 500 }}>
-            🤝 คะแนนเฉลี่ย 2.1 (การต้อนรับ)
+            🤝 คะแนนเฉลี่ย 1.1 (การต้อนรับ)
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#a78bfa' }}>
             {avgWelcomeOverall} <span style={{ fontSize: '0.9rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ 10</span>
@@ -737,7 +737,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
         {/* Card 4: Avg Grooming Score */}
         <div className="glass-panel" style={{ padding: '20px' }}>
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 500 }}>
-            👔 คะแนนเฉลี่ย 2.2 (การแต่งกาย)
+            👔 คะแนนเฉลี่ย 1.2 (การแต่งกาย)
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#2dd4bf' }}>
             {avgGroomingOverall} <span style={{ fontSize: '0.9rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ 10</span>
@@ -750,7 +750,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
         {/* Card 5: Avg Responsibility Score */}
         <div className="glass-panel" style={{ padding: '20px' }}>
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 500 }}>
-            💼 คะแนนเฉลี่ย 3.1 (ความรับผิดชอบ)
+            💼 คะแนนเฉลี่ย 2.1 (ความรับผิดชอบ)
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#38bdf8' }}>
             {avgRespOverall} <span style={{ fontSize: '0.9rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ 10</span>
@@ -763,7 +763,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
         {/* Card 6: Avg Volunteering Score */}
         <div className="glass-panel" style={{ padding: '20px' }}>
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 500 }}>
-            😊 คะแนนเฉลี่ย 3.2 (จิตอาสา)
+            😊 คะแนนเฉลี่ย 2.2 (จิตอาสา)
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#fb7185' }}>
             {avgVolOverall} <span style={{ fontSize: '0.9rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ 10</span>
@@ -776,7 +776,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
         {/* Card 7: Avg Activity Score */}
         <div className="glass-panel" style={{ padding: '20px' }}>
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 500 }}>
-            📅 คะแนนเฉลี่ย 3.3 (ร่วมกิจกรรม)
+            📅 คะแนนเฉลี่ย 2.3 (ร่วมกิจกรรม)
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#facc15' }}>
             {avgActOverall} <span style={{ fontSize: '0.9rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ 10</span>
@@ -896,11 +896,11 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                 style={{ width: 'auto', padding: '6px 12px', fontSize: '0.85rem' }}
               >
                 <option value="rank">ตามอันดับคะแนนรวม (Rank)</option>
-                <option value="welcome">คะแนนการต้อนรับสูงสุด (2.1)</option>
-                <option value="grooming">คะแนนการแต่งกายสูงสุด (2.2)</option>
-                <option value="responsibility">คะแนนความรับผิดชอบสูงสุด (3.1)</option>
-                <option value="volunteering">คะแนนจิตอาสาสูงสุด (3.2)</option>
-                <option value="activity">คะแนนร่วมกิจกรรมสูงสุด (3.3)</option>
+                <option value="welcome">คะแนนการต้อนรับสูงสุด (1.1)</option>
+                <option value="grooming">คะแนนการแต่งกายสูงสุด (1.2)</option>
+                <option value="responsibility">คะแนนความรับผิดชอบสูงสุด (2.1)</option>
+                <option value="volunteering">คะแนนจิตอาสาสูงสุด (2.2)</option>
+                <option value="activity">คะแนนร่วมกิจกรรมสูงสุด (2.3)</option>
                 <option value="name">เรียงตามชื่อ</option>
               </select>
             </>
@@ -944,11 +944,11 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>อันดับ</th>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>ชื่อหมอนวด</th>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>ผู้ประเมิน</th>
-                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#a78bfa', textAlign: 'center' }}>2.1 ต้อนรับ (10)</th>
-                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#2dd4bf', textAlign: 'center' }}>2.2 แต่งกาย (10)</th>
-                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#38bdf8', textAlign: 'center' }}>3.1 หน้าที่ (10)</th>
-                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#fb7185', textAlign: 'center' }}>3.2 จิตอาสา (10)</th>
-                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#facc15', textAlign: 'center' }}>3.3 กิจกรรม (10)</th>
+                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#a78bfa', textAlign: 'center' }}>1.1 ต้อนรับ (10)</th>
+                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#2dd4bf', textAlign: 'center' }}>1.2 แต่งกาย (10)</th>
+                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#38bdf8', textAlign: 'center' }}>2.1 หน้าที่ (10)</th>
+                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#fb7185', textAlign: 'center' }}>2.2 จิตอาสา (10)</th>
+                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#facc15', textAlign: 'center' }}>2.3 กิจกรรม (10)</th>
                 <th style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--accent-gold)' }}>คะแนนรวมเฉลี่ย</th>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>สถานะการประเมิน</th>
               </tr>
@@ -1162,11 +1162,11 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
                         <th style={{ padding: '6px 6px' }}>หมอนวด</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#a78bfa' }}>2.1</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#2dd4bf' }}>2.2</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#38bdf8' }}>3.1</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#fb7185' }}>3.2</th>
-                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#facc15' }}>3.3</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#a78bfa' }}>1.1</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#2dd4bf' }}>1.2</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#38bdf8' }}>2.1</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#fb7185' }}>2.2</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#facc15' }}>2.3</th>
                         <th style={{ padding: '6px 6px', textAlign: 'center', color: 'var(--accent-gold)' }}>เฉลี่ย</th>
                       </tr>
                     </thead>
@@ -1285,7 +1285,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                         }} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        <span>หัวข้อ 2.1-2.2 และ 3.1-3.3 (รวม 5 ข้อ)</span>
+                        <span>หัวข้อ 1.1-1.2 และ 2.1-2.3 (รวม 5 ข้อ)</span>
                         <span>{item.isFullyCompleted ? 'ประเมินครบถ้วน' : `คงเหลือ ${item.behTotal - item.behCompleted} คน`}</span>
                       </div>
                     </div>

@@ -43,16 +43,16 @@ const CRITERIA_CONFIG = EVALUATION_CRITERIA.map(c => ({
 
 const CATEGORY_GROUPS = [
   {
-    categoryName: 'ข้อ 2: พฤติกรรมบริการ',
+    categoryName: 'ข้อ 1: พฤติกรรมบริการ',
     badgeColor: '#c084fc',
     badgeBg: 'rgba(192, 132, 252, 0.12)',
-    criteria: CRITERIA_CONFIG.filter(c => c.code.startsWith('2.'))
+    criteria: CRITERIA_CONFIG.filter(c => c.code.startsWith('1.'))
   },
   {
-    categoryName: 'ข้อ 3: ความรับผิดชอบและการมีส่วนร่วม',
+    categoryName: 'ข้อ 2: ความรับผิดชอบและการมีส่วนร่วม',
     badgeColor: '#38bdf8',
     badgeBg: 'rgba(56, 189, 248, 0.12)',
-    criteria: CRITERIA_CONFIG.filter(c => c.code.startsWith('3.'))
+    criteria: CRITERIA_CONFIG.filter(c => c.code.startsWith('2.'))
   }
 ];
 
