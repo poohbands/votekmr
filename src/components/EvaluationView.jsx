@@ -6,7 +6,8 @@ import {
   saveBehaviorSubScore,
   isEvaluationClosed,
   getSystemSettings,
-  pushToCloud
+  pushToCloud,
+  pullFromCloud
 } from '../data/mockData';
 import {
   Award,
@@ -36,24 +37,49 @@ export default function EvaluationView({ currentUser }) {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
   useEffect(() => {
-    const loadedMasseuses = getMasseuses();
-    const loadedAssign = getBehaviorAssignments();
-    const loadedEvals = getEvaluations();
-    const loadedSettings = getSystemSettings();
-    const closedStatus = isEvaluationClosed();
+    // Pull cloud first to get latest assignments + evaluations before rendering
+    const initLoad = async () => {
+      await pullFromCloud();
+      const loadedMasseuses = getMasseuses();
+      const loadedAssign = getBehaviorAssignments();
+      const loadedEvals = getEvaluations();
+      const loadedSettings = getSystemSettings();
+      const closedStatus = isEvaluationClosed();
 
-    setMasseuses(loadedMasseuses);
-    setAssignments(loadedAssign);
-    setEvaluations(loadedEvals);
-    setSystemSettings(loadedSettings);
-    setIsClosed(closedStatus);
+      setMasseuses(loadedMasseuses);
+      setAssignments(loadedAssign);
+      setEvaluations(loadedEvals);
+      setSystemSettings(loadedSettings);
+      setIsClosed(closedStatus);
+    };
+    initLoad();
 
     const handleSync = (e) => {
-      if (e?.detail) {
-        setEvaluations(e.detail);
+      // Safely merge: never wipe existing evaluations with an empty/incomplete sync event
+      const incoming = e?.detail;
+      if (incoming && typeof incoming === 'object' && Object.keys(incoming).length > 0) {
+        // Merge incoming with current local to avoid losing scores
+        setEvaluations(prev => {
+          const merged = { ...incoming };
+          // Ensure local user's evaluations are preserved if incoming is missing them
+          Object.keys(prev).forEach(staffId => {
+            if (!merged[staffId]) {
+              merged[staffId] = prev[staffId];
+            } else {
+              const prevBeh = prev[staffId]?.behavior || {};
+              const inBeh = merged[staffId]?.behavior || {};
+              const mergedBeh = { ...prevBeh, ...inBeh };
+              merged[staffId] = { ...prev[staffId], ...merged[staffId], behavior: mergedBeh };
+            }
+          });
+          return merged;
+        });
       } else {
+        // No detail or empty — just re-read from localStorage (which has been updated)
         setEvaluations(getEvaluations());
       }
+      // Also refresh assignments in case they changed
+      setAssignments(getBehaviorAssignments());
     };
     window.addEventListener('evaluations_synced', handleSync);
     window.addEventListener('storage', handleSync);

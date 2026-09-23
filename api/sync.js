@@ -132,7 +132,10 @@ async function loadLatestData() {
     }
 
     base.settings = { ...(blobData.settings || {}), ...(inMemoryStore.settings || {}) };
-    base.assignments = { ...(blobData.assignments || {}), ...(inMemoryStore.assignments || {}) };
+    // Blob (persistent storage) is authoritative for assignments — do not let transient in-memory override it
+    base.assignments = Object.keys(blobData.assignments || {}).length > 0
+      ? blobData.assignments
+      : (inMemoryStore.assignments || {});
   }
 
   inMemoryStore = base;

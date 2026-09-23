@@ -233,15 +233,18 @@ export async function pullFromCloud() {
     }
 
     if (data) {
-      // 0. Check evaluations reset timestamp
-      if (data.evaluationsResetAt) {
-        const localResetAt = Number(localStorage.getItem(STORAGE_KEYS.EVALUATIONS_RESET_AT) || 0);
-        if (data.evaluationsResetAt > localResetAt) {
-          localStorage.setItem(STORAGE_KEYS.EVALUATIONS_RESET_AT, data.evaluationsResetAt.toString());
-          localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify({}));
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: {} }));
-          }
+      // 0. Check evaluations reset timestamp — cloud reset takes precedence
+      const localResetAt = Number(localStorage.getItem(STORAGE_KEYS.EVALUATIONS_RESET_AT) || 0);
+      const cloudResetAt = Number(data.evaluationsResetAt || 0);
+      let wasReset = false;
+
+      if (cloudResetAt > localResetAt) {
+        localStorage.setItem(STORAGE_KEYS.EVALUATIONS_RESET_AT, cloudResetAt.toString());
+        localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(data.evaluations || {}));
+        wasReset = true;
+        if (typeof window !== 'undefined') {
+          // Use null detail to signal "reset" — UI should re-read from localStorage
+          window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: null }));
         }
       }
 
@@ -270,32 +273,21 @@ export async function pullFromCloud() {
         const localMasseuseOverrides = getMasseuseOverrides();
         localStorage.setItem(STORAGE_KEYS.MASSEUSE_OVERRIDES, JSON.stringify({ ...localMasseuseOverrides, ...data.masseuseOverrides }));
       }
-      if (data.evaluations && typeof data.evaluations === 'object') {
-        const localResetAt = Number(localStorage.getItem(STORAGE_KEYS.EVALUATIONS_RESET_AT) || 0);
-        const cloudResetAt = Number(data.evaluationsResetAt || 0);
-
-        if (cloudResetAt > localResetAt) {
-          // Cloud has a newer reset
-          localStorage.setItem(STORAGE_KEYS.EVALUATIONS_RESET_AT, cloudResetAt.toString());
-          localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(data.evaluations || {}));
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: data.evaluations || {} }));
-          }
-        } else {
-          // Merge server evaluations with local evaluations (local evaluations take precedence so recent ratings are never lost)
-          const localEvals = getEvaluations();
-          const mergedEvals = mergeEvaluations(data.evaluations, localEvals);
-          localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(mergedEvals));
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: mergedEvals }));
-          }
+      // Cloud assignments are authoritative — always prefer cloud over local
+      if (data.assignments && typeof data.assignments === 'object' && Object.keys(data.assignments).length > 0) {
+        localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(data.assignments));
+      }
+      if (!wasReset && data.evaluations && typeof data.evaluations === 'object') {
+        // Merge cloud evaluations with local evaluations (local takes precedence for same key)
+        const localEvals = getEvaluations();
+        const mergedEvals = mergeEvaluations(data.evaluations, localEvals);
+        localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(mergedEvals));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: mergedEvals }));
         }
       }
       if (data.settings && typeof data.settings === 'object') {
         localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(data.settings));
-      }
-      if (data.assignments && typeof data.assignments === 'object' && Object.keys(data.assignments).length > 0) {
-        localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(data.assignments));
       }
       isPullingCloud = false;
       return true;
