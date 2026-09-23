@@ -210,13 +210,9 @@ export default async function handler(req, res) {
           currentData.evaluations = {};
           currentData.evaluationsResetAt = resetTime;
         } else if (payload.evaluations && typeof payload.evaluations === 'object') {
-          const payloadResetAt = Number(payload.evaluationsResetAt || 0);
-          const currentResetAt = Number(currentData.evaluationsResetAt || 0);
-
-          if (payloadResetAt >= currentResetAt) {
-            currentData.evaluations = mergeEvaluations(currentData.evaluations, payload.evaluations);
-          } else {
-            console.log('Ignored stale client evaluations sent before reset:', payloadResetAt, '<', currentResetAt);
+          currentData.evaluations = mergeEvaluations(currentData.evaluations, payload.evaluations);
+          if (payload.evaluationsResetAt && payload.evaluationsResetAt > (currentData.evaluationsResetAt || 0)) {
+            currentData.evaluationsResetAt = payload.evaluationsResetAt;
           }
         }
 

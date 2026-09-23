@@ -66,6 +66,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('rank');
   const [viewMode, setViewMode] = useState('leaderboard');
+  const [evaluatorFilter, setEvaluatorFilter] = useState('all');
   const [assignments, setAssignments] = useState({});
   const [notice, setNotice] = useState('');
   const [systemSettings, setSystemSettings] = useState({ deadline: '', isLockedManually: false });
@@ -398,10 +399,30 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
     );
   }
 
-  let displayedResults = results.filter(r =>
-    r.masseuse.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.masseuse.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const myGroupCount = results.filter(r => r.assignedBehaviorStaffId === currentUser.id).length;
+  const myGroupCompleted = results.filter(r => r.assignedBehaviorStaffId === currentUser.id && r.totalScore !== null).length;
+  const totalCompletedCount = results.filter(r => r.totalScore !== null).length;
+  const totalPendingCount = results.filter(r => r.totalScore === null).length;
+
+  let displayedResults = results.filter(r => {
+    const matchesSearch = r.masseuse.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          r.masseuse.code.toLowerCase().includes(searchTerm.toLowerCase());
+    if (!matchesSearch) return false;
+
+    if (evaluatorFilter === 'my_group') {
+      return r.assignedBehaviorStaffId === currentUser.id;
+    }
+    if (evaluatorFilter === 'evaluated') {
+      return r.totalScore !== null;
+    }
+    if (evaluatorFilter === 'pending') {
+      return r.totalScore === null;
+    }
+    if (evaluatorFilter !== 'all') {
+      return r.assignedBehaviorStaffId === evaluatorFilter;
+    }
+    return true;
+  });
 
   if (sortBy === 'welcome') {
     displayedResults.sort((a, b) => (b.welcomeScore || 0) - (a.welcomeScore || 0));
@@ -703,6 +724,87 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
         </div>
       </div>
 
+      {/* Information Banner about Evaluator Grouping & Quick Scope Filters */}
+      <div className="glass-panel" style={{
+        padding: '16px 20px',
+        marginBottom: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '16px',
+        fontSize: '0.88rem',
+        borderRadius: 'var(--radius-lg)',
+        borderLeft: '4px solid #14b8a6'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            background: 'rgba(20, 184, 166, 0.2)',
+            color: '#2dd4bf',
+            padding: '8px',
+            borderRadius: '50%',
+            display: 'flex'
+          }}>
+            <CheckCircle2 size={22} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.96rem' }}>
+              สถานะ: คุณ ({currentUser.name}) ประเมินกลุ่มของคุณเสร็จสิ้นแล้ว {myGroupCompleted} / {myGroupCount} คน
+              {totalPendingCount > 0 ? (
+                <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}> (หมอนวดอีก {totalPendingCount} คน อยู่ในกลุ่มของผู้ประเมินท่านอื่น)</span>
+              ) : (
+                <span style={{ color: '#2dd4bf', fontWeight: 600 }}> (ประเมินครบถ้วนทั้งระบบแล้ว 🎉)</span>
+              )}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+              💡 แต่ละคนจะได้รับมอบหมาย 5 คน เพื่อกระจายการประเมิน (คลิกปุ่มตัวกรองด้านขวาเพื่อดูเฉพาะกลุ่มที่สนใจ)
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Filter Buttons */}
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => setEvaluatorFilter('all')}
+            className={`btn ${evaluatorFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ fontSize: '0.82rem', padding: '6px 14px', borderRadius: '8px' }}
+          >
+            ทั้งหมด ({totalMasseuses})
+          </button>
+          <button
+            type="button"
+            onClick={() => setEvaluatorFilter('my_group')}
+            className={`btn ${evaluatorFilter === 'my_group' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{
+              fontSize: '0.82rem',
+              padding: '6px 14px',
+              borderRadius: '8px',
+              background: evaluatorFilter === 'my_group' ? 'linear-gradient(135deg, #10b981, #059669)' : undefined,
+              fontWeight: 600
+            }}
+          >
+            กลุ่มของฉัน ({myGroupCompleted}/{myGroupCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setEvaluatorFilter('evaluated')}
+            className={`btn ${evaluatorFilter === 'evaluated' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ fontSize: '0.82rem', padding: '6px 14px', borderRadius: '8px' }}
+          >
+            ประเมินแล้ว ({totalCompletedCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setEvaluatorFilter('pending')}
+            className={`btn ${evaluatorFilter === 'pending' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ fontSize: '0.82rem', padding: '6px 14px', borderRadius: '8px' }}
+          >
+            รอผู้ประเมินอื่น ({totalPendingCount})
+          </button>
+        </div>
+      </div>
+
       {/* Table Toolbar View Switcher */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
         
@@ -864,11 +966,15 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
 
                     <td style={{ padding: '14px 16px' }}>
                       {isComplete ? (
-                        <span className="badge badge-teal">เสร็จสมบูรณ์</span>
+                        <span className="badge badge-teal" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <CheckCircle2 size={13} /> ประเมินเสร็จสิ้น
+                        </span>
                       ) : isPartial ? (
-                        <span className="badge badge-gold">อยู่ระหว่างประเมิน</span>
+                        <span className="badge badge-gold">ประเมินบางข้อ</span>
                       ) : (
-                        <span className="badge badge-gray">ยังไม่เริ่ม</span>
+                        <span className="badge" style={{ background: 'rgba(255, 255, 255, 0.06)', color: 'var(--text-secondary)' }}>
+                          รอ {item.assignedBehaviorStaffName} ประเมิน
+                        </span>
                       )}
                     </td>
                   </tr>

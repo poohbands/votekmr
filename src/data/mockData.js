@@ -274,17 +274,17 @@ export async function pullFromCloud() {
         const localResetAt = Number(localStorage.getItem(STORAGE_KEYS.EVALUATIONS_RESET_AT) || 0);
         const cloudResetAt = Number(data.evaluationsResetAt || 0);
 
-        if (Object.keys(data.evaluations).length === 0 && (cloudResetAt >= localResetAt || localResetAt > 0)) {
-          // Cloud evaluations are reset and empty
-          localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify({}));
+        if (cloudResetAt > localResetAt) {
+          // Cloud has a newer reset
+          localStorage.setItem(STORAGE_KEYS.EVALUATIONS_RESET_AT, cloudResetAt.toString());
+          localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(data.evaluations || {}));
           if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: {} }));
+            window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: data.evaluations || {} }));
           }
-        } else if (localResetAt > cloudResetAt && Object.keys(getEvaluations()).length === 0) {
-          // Local reset is newer than cloud data; do not restore old cloud evaluations
         } else {
+          // Merge server evaluations with local evaluations (local evaluations take precedence so recent ratings are never lost)
           const localEvals = getEvaluations();
-          const mergedEvals = mergeEvaluations(localEvals, data.evaluations);
+          const mergedEvals = mergeEvaluations(data.evaluations, localEvals);
           localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(mergedEvals));
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: mergedEvals }));
@@ -903,8 +903,21 @@ export function calculateResults() {
       }
     }
 
-    const assignedStaffName = staffList.find(s => s.id === assignedStaffId)?.name || '-';
-    const rawEval = evaluations[assignedStaffId]?.behavior?.[m.id] ?? null;
+    let actualEvaluatorId = assignedStaffId;
+    let rawEval = (assignedStaffId && evaluations[assignedStaffId]?.behavior?.[m.id]) ?? null;
+
+    // Smart Fallback: If not found under assigned staff, search if ANY staff evaluated this masseuse
+    if (rawEval === null) {
+      for (const s of staffList) {
+        if (evaluations[s.id]?.behavior?.[m.id]) {
+          rawEval = evaluations[s.id].behavior[m.id];
+          actualEvaluatorId = s.id;
+          break;
+        }
+      }
+    }
+
+    const assignedStaffName = staffList.find(s => s.id === (actualEvaluatorId || assignedStaffId))?.name || '-';
 
     let welcomeScore = null;
     let groomingScore = null;
