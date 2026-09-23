@@ -219,8 +219,8 @@ export default async function handler(req, res) {
         if (payload.settings && !payload.resetAll) {
           currentData.settings = { ...(currentData.settings || {}), ...payload.settings };
         }
-        if (payload.assignments && !payload.resetAll) {
-          currentData.assignments = { ...(currentData.assignments || {}), ...payload.assignments };
+        if (payload.assignments && (payload.isAssignmentUpdate || payload.resetAll)) {
+          currentData.assignments = payload.assignments;
         }
         currentData.updatedAt = Date.now();
 

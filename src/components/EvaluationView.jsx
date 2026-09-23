@@ -109,8 +109,9 @@ export default function EvaluationView({ currentUser }) {
   const checkCompletion = (currentEvals) => {
     const userBehavior = currentEvals[currentUser.id]?.behavior || {};
     const assignedIds = assignments[currentUser.id] || [];
+    const targetIds = Array.from(new Set([...assignedIds, ...Object.keys(userBehavior)]));
     
-    const isAllDone = assignedIds.length > 0 && assignedIds.every(id => {
+    const isAllDone = targetIds.length > 0 && targetIds.every(id => {
       const evalItem = userBehavior[id];
       if (!evalItem) return false;
       if (typeof evalItem === 'number') return true;
@@ -124,7 +125,9 @@ export default function EvaluationView({ currentUser }) {
 
   const userBehaviorEvals = evaluations[currentUser.id]?.behavior || {};
   const assignedIds = assignments[currentUser.id] || [];
-  const assignedMasseuses = masseuses.filter(m => assignedIds.includes(m.id));
+  const userEvaluatedIds = Object.keys(userBehaviorEvals);
+  const targetAssignedIds = Array.from(new Set([...assignedIds, ...userEvaluatedIds]));
+  const assignedMasseuses = masseuses.filter(m => targetAssignedIds.includes(m.id));
   const activeMasseuseList = (currentUser.role === 'admin' && viewScope === 'all')
     ? masseuses
     : assignedMasseuses;

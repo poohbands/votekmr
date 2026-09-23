@@ -319,6 +319,7 @@ export async function pushToCloud(options = {}) {
   try {
     const isReset = Boolean(options.resetEvaluations || options.resetAll);
     const resetAt = options.evaluationsResetAt || Number(localStorage.getItem(STORAGE_KEYS.EVALUATIONS_RESET_AT) || 0);
+    const isAssignmentUpdate = Boolean(options.isAssignmentUpdate || options.resetAll);
     const payload = {
       customStaff: getCustomStaff(),
       staffOverrides: getStaffOverrides(),
@@ -327,6 +328,7 @@ export async function pushToCloud(options = {}) {
       evaluations: isReset ? {} : getEvaluations(),
       settings: getSystemSettings(),
       assignments: getBehaviorAssignments(),
+      isAssignmentUpdate,
       resetEvaluations: isReset,
       resetAll: Boolean(options.resetAll),
       evaluationsResetAt: resetAt
@@ -713,31 +715,43 @@ function shuffleArray(array) {
   return arr;
 }
 
-// Generate random behavior group assignments dynamically
-export function generateBehaviorAssignments() {
-  const masseuses = getMasseuses().map(m => m.id);
-  const shuffled = shuffleArray(masseuses);
+// Generate behavior group assignments (deterministic by default, or random shuffle when requested)
+export function generateBehaviorAssignments(isRandom = false) {
+  const masseuseList = getMasseuses();
   const staffList = getStaffUsers();
   const behaviorEvaluators = staffList.filter(s => s.isBehaviorEvaluator);
 
   const assignments = {};
-  if (behaviorEvaluators.length === 0) {
+  if (behaviorEvaluators.length === 0 || masseuseList.length === 0) {
     localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments));
-    pushToCloud();
+    if (isRandom) {
+      pushToCloud({ isAssignmentUpdate: true });
+    }
     return assignments;
   }
 
+  let masseuseIds;
+  if (isRandom) {
+    masseuseIds = shuffleArray(masseuseList.map(m => m.id));
+  } else {
+    // Sort deterministically by code (MN-01, MN-02, ...)
+    const sorted = [...masseuseList].sort((a, b) => (a.code || '').localeCompare(b.code || '', undefined, { numeric: true }));
+    masseuseIds = sorted.map(m => m.id);
+  }
+
   // Divide into groups of 5 masseuses per evaluator (e.g. 30 masseuses / 6 evaluators = 5 each)
-  const groupSize = Math.max(1, Math.floor(shuffled.length / behaviorEvaluators.length));
+  const groupSize = Math.max(1, Math.floor(masseuseIds.length / behaviorEvaluators.length));
 
   behaviorEvaluators.forEach((evaluator, index) => {
     const start = index * groupSize;
-    const end = index === behaviorEvaluators.length - 1 ? shuffled.length : start + groupSize;
-    assignments[evaluator.id] = shuffled.slice(start, end);
+    const end = index === behaviorEvaluators.length - 1 ? masseuseIds.length : start + groupSize;
+    assignments[evaluator.id] = masseuseIds.slice(start, end);
   });
 
   localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments));
-  pushToCloud();
+  if (isRandom) {
+    pushToCloud({ isAssignmentUpdate: true });
+  }
   return assignments;
 }
 
@@ -745,12 +759,15 @@ export function getBehaviorAssignments() {
   const stored = localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS);
   if (stored) {
     try {
-      return JSON.parse(stored);
+      const parsed = JSON.parse(stored);
+      if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+        return parsed;
+      }
     } catch (e) {
       console.error('Failed to parse behavior assignments:', e);
     }
   }
-  return generateBehaviorAssignments();
+  return generateBehaviorAssignments(false);
 }
 
 export function getEvaluations() {
@@ -862,10 +879,20 @@ export function getStaffProgressReport() {
   return staffList.map(staff => {
     const userEvals = evaluations[staff.id]?.behavior || {};
     const assignedIds = assignments[staff.id] || [];
-    const behTotal = assignedIds.length;
-    
+
+    // Also include any masseuse ID that this user actually evaluated
+    const evaluatedIds = Object.keys(userEvals).filter(id => {
+      const score = userEvals[id];
+      if (score === null || score === undefined) return false;
+      if (typeof score === 'number') return true;
+      return score.welcome !== undefined || score.grooming !== undefined;
+    });
+
+    const allTargetIds = Array.from(new Set([...assignedIds, ...evaluatedIds]));
+    const behTotal = Math.max(assignedIds.length, allTargetIds.length);
+
     // Completed if both 2.1 (welcome) and 2.2 (grooming) are evaluated
-    const behCompleted = assignedIds.filter(id => {
+    const behCompleted = allTargetIds.filter(id => {
       const score = userEvals[id];
       if (score === null || score === undefined) return false;
       if (typeof score === 'number') return true;
@@ -881,7 +908,7 @@ export function getStaffProgressReport() {
       behPercent,
       isBehaviorEvaluator: staff.isBehaviorEvaluator,
       overallPercent: behPercent,
-      isFullyCompleted: behTotal > 0 && behCompleted === behTotal
+      isFullyCompleted: behTotal > 0 && behCompleted >= behTotal
     };
   });
 }
@@ -895,59 +922,76 @@ export function calculateResults() {
   const behaviorEvaluators = staffList.filter(s => s.isBehaviorEvaluator);
 
   const results = masseusesList.map(m => {
-    let assignedStaffId = null;
-    for (const evaluator of behaviorEvaluators) {
-      if (assignments[evaluator.id]?.includes(m.id)) {
-        assignedStaffId = evaluator.id;
-        break;
-      }
-    }
+    // 1. Find all evaluators assigned to this masseuse
+    const assignedStaffIds = behaviorEvaluators
+      .filter(e => assignments[e.id]?.includes(m.id))
+      .map(e => e.id);
 
-    let actualEvaluatorId = assignedStaffId;
-    let rawEval = (assignedStaffId && evaluations[assignedStaffId]?.behavior?.[m.id]) ?? null;
+    // 2. Find all evaluators who actually submitted evaluations for this masseuse
+    const whoEvaluated = staffList.filter(s => {
+      const b = evaluations[s.id]?.behavior?.[m.id];
+      if (b === null || b === undefined) return false;
+      if (typeof b === 'number') return true;
+      return typeof b === 'object' && (b.welcome !== undefined || b.grooming !== undefined);
+    });
 
-    // Smart Fallback: If not found under assigned staff, search if ANY staff evaluated this masseuse
-    if (rawEval === null) {
-      for (const s of staffList) {
-        if (evaluations[s.id]?.behavior?.[m.id]) {
-          rawEval = evaluations[s.id].behavior[m.id];
-          actualEvaluatorId = s.id;
-          break;
+    const evaluatedStaffIds = whoEvaluated.map(s => s.id);
+
+    // 3. Combined effective staff IDs (evaluated take priority, plus assigned)
+    const effectiveStaffIds = Array.from(new Set([
+      ...(evaluatedStaffIds.length > 0 ? evaluatedStaffIds : []),
+      ...assignedStaffIds
+    ]));
+
+    const assignedBehaviorStaffName = effectiveStaffIds.length > 0
+      ? effectiveStaffIds.map(id => staffList.find(s => s.id === id)?.name || id).join(', ')
+      : '-';
+
+    // 4. Calculate welcome & grooming scores (average across all submitted evaluations)
+    let welcomeSum = 0, welcomeCount = 0;
+    let groomingSum = 0, groomingCount = 0;
+
+    for (const s of whoEvaluated) {
+      const raw = evaluations[s.id]?.behavior?.[m.id];
+      if (raw !== null && raw !== undefined) {
+        if (typeof raw === 'number') {
+          welcomeSum += raw;
+          welcomeCount++;
+          groomingSum += raw;
+          groomingCount++;
+        } else if (typeof raw === 'object') {
+          if (raw.welcome !== undefined && raw.welcome !== null) {
+            welcomeSum += Number(raw.welcome);
+            welcomeCount++;
+          }
+          if (raw.grooming !== undefined && raw.grooming !== null) {
+            groomingSum += Number(raw.grooming);
+            groomingCount++;
+          }
         }
       }
     }
 
-    const assignedStaffName = staffList.find(s => s.id === (actualEvaluatorId || assignedStaffId))?.name || '-';
+    const welcomeScore = welcomeCount > 0 ? Math.round((welcomeSum / welcomeCount) * 10) / 10 : null;
+    const groomingScore = groomingCount > 0 ? Math.round((groomingSum / groomingCount) * 10) / 10 : null;
 
-    let welcomeScore = null;
-    let groomingScore = null;
     let behaviorScore = null;
-
-    if (rawEval !== null && rawEval !== undefined) {
-      if (typeof rawEval === 'number') {
-        welcomeScore = rawEval;
-        groomingScore = rawEval;
-        behaviorScore = rawEval;
-      } else if (typeof rawEval === 'object') {
-        welcomeScore = rawEval.welcome ?? null;
-        groomingScore = rawEval.grooming ?? null;
-        if (welcomeScore !== null && groomingScore !== null) {
-          behaviorScore = Math.round(((welcomeScore + groomingScore) / 2) * 10) / 10;
-        } else if (welcomeScore !== null) {
-          behaviorScore = welcomeScore;
-        } else if (groomingScore !== null) {
-          behaviorScore = groomingScore;
-        }
-      }
+    if (welcomeScore !== null && groomingScore !== null) {
+      behaviorScore = Math.round(((welcomeScore + groomingScore) / 2) * 10) / 10;
+    } else if (welcomeScore !== null) {
+      behaviorScore = welcomeScore;
+    } else if (groomingScore !== null) {
+      behaviorScore = groomingScore;
     }
 
-    // Responsibility is closed and not included in score calculation
     const totalScore = behaviorScore;
 
     return {
       masseuse: m,
-      assignedBehaviorStaffId: assignedStaffId,
-      assignedBehaviorStaffName: assignedStaffName,
+      assignedBehaviorStaffId: assignedStaffIds[0] || effectiveStaffIds[0] || null,
+      assignedStaffIds: effectiveStaffIds,
+      evaluatedStaffIds,
+      assignedBehaviorStaffName,
       welcomeScore,
       groomingScore,
       behaviorScore,
