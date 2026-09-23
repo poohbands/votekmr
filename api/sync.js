@@ -60,22 +60,14 @@ function mergeEvaluations(evalsA, evalsB) {
       const objA = typeof mA === 'number' ? { welcome: mA, grooming: mA } : (typeof mA === 'object' && mA !== null ? mA : {});
       const objB = typeof mB === 'number' ? { welcome: mB, grooming: mB } : (typeof mB === 'object' && mB !== null ? mB : {});
 
+      const allSubKeys = new Set([...Object.keys(objA), ...Object.keys(objB)]);
       const subMerged = {};
-
-      if (objA.welcome !== undefined && objB.welcome === undefined) {
-        subMerged.welcome = objA.welcome;
-      } else if (objB.welcome !== undefined && objA.welcome === undefined) {
-        subMerged.welcome = objB.welcome;
-      } else if (objA.welcome !== undefined && objB.welcome !== undefined) {
-        subMerged.welcome = objB.welcome ?? objA.welcome;
-      }
-
-      if (objA.grooming !== undefined && objB.grooming === undefined) {
-        subMerged.grooming = objA.grooming;
-      } else if (objB.grooming !== undefined && objA.grooming === undefined) {
-        subMerged.grooming = objB.grooming;
-      } else if (objA.grooming !== undefined && objB.grooming !== undefined) {
-        subMerged.grooming = objB.grooming ?? objA.grooming;
+      for (const subKey of allSubKeys) {
+        if (objB[subKey] !== undefined) {
+          subMerged[subKey] = objB[subKey];
+        } else if (objA[subKey] !== undefined) {
+          subMerged[subKey] = objA[subKey];
+        }
       }
 
       merged[staffId].behavior[mId] = subMerged;

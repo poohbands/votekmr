@@ -1,19 +1,59 @@
 // Data Model and Storage Utilities for Masseuse Evaluation System
 
-export const BEHAVIOR_SUB_CRITERIA = [
+export const EVALUATION_CRITERIA = [
   {
     key: 'welcome',
     code: '2.1',
+    category: '2. พฤติกรรมบริการ',
     title: 'การต้อนรับ ดูแลผู้มารับบริการ ตั้งแต่เริ่ม จบเสร็จสิ้นบริการ',
-    description: 'การทักทาย ไหว้ ยิ้มแย้ม การเอาใจใส่สอบถามความต้องการ และการดูแลตลอดจนเสร็จสิ้นบริการ'
+    shortTitle: '2.1 การต้อนรับ ดูแลผู้มารับบริการ',
+    description: 'การทักทาย ไหว้ ยิ้มแย้ม การเอาใจใส่สอบถามความต้องการ และการดูแลตลอดจนเสร็จสิ้นบริการ',
+    color: '#a78bfa',
+    gradient: 'linear-gradient(135deg, #8b5cf6, #6d28d9)'
   },
   {
     key: 'grooming',
     code: '2.2',
+    category: '2. พฤติกรรมบริการ',
     title: 'การแต่งกาย สุภาพเรียบร้อย เหมาะสม',
-    description: 'ความสะอาดของชุดยูนิฟอร์ม ทรงผม ความเรียบร้อย ถูกสุขอนามัย และความเหมาะสม'
+    shortTitle: '2.2 การแต่งกาย สุภาพเรียบร้อย เหมาะสม',
+    description: 'ความสะอาดของชุดยูนิฟอร์ม ทรงผม ความเรียบร้อย ถูกสุขอนามัย และความเหมาะสม',
+    color: '#2dd4bf',
+    gradient: 'linear-gradient(135deg, #14b8a6, #0d9488)'
+  },
+  {
+    key: 'responsibility',
+    code: '3.1',
+    category: '3. ความรับผิดชอบและการมีส่วนร่วม',
+    title: 'การรับผิดชอบต่องานที่ได้รับและหน้าที่',
+    shortTitle: '3.1 การรับผิดชอบต่องานที่ได้รับและหน้าที่',
+    description: 'ความรับผิดชอบต่องานที่ได้รับมอบหมาย ตรงต่อเวลา และความใส่ใจในหน้าที่',
+    color: '#38bdf8',
+    gradient: 'linear-gradient(135deg, #0284c7, #2563eb)'
+  },
+  {
+    key: 'volunteering',
+    code: '3.2',
+    category: '3. ความรับผิดชอบและการมีส่วนร่วม',
+    title: 'การมีจิตอาสาช่วยเหลือเพื่อนร่วมงาน หรือ จนท.',
+    shortTitle: '3.2 การมีจิตอาสาช่วยเหลือเพื่อนร่วมงาน หรือ จนท.',
+    description: 'การมีจิตอาสาช่วยเหลือเกื้อกูลเพื่อนร่วมงาน หรือเจ้าหน้าที่ด้วยความเต็มใจ',
+    color: '#fb7185',
+    gradient: 'linear-gradient(135deg, #f43f5e, #be123c)'
+  },
+  {
+    key: 'activity',
+    code: '3.3',
+    category: '3. ความรับผิดชอบและการมีส่วนร่วม',
+    title: 'การเข้าร่วมกิจกรรมหรือ งานของหน่วยงาน',
+    shortTitle: '3.3 การเข้าร่วมกิจกรรมหรือ งานของหน่วยงาน',
+    description: 'การให้ความร่วมมือและเข้าร่วมกิจกรรมหรืองานต่างๆ ของหน่วยงานอย่างสม่ำเสมอ',
+    color: '#facc15',
+    gradient: 'linear-gradient(135deg, #eab308, #ca8a04)'
   }
 ];
+
+export const BEHAVIOR_SUB_CRITERIA = EVALUATION_CRITERIA;
 
 export const INITIAL_STAFF_USERS = [
   {
@@ -169,22 +209,14 @@ export function mergeEvaluations(evalsA, evalsB) {
       const objA = typeof mA === 'number' ? { welcome: mA, grooming: mA } : (typeof mA === 'object' && mA !== null ? mA : {});
       const objB = typeof mB === 'number' ? { welcome: mB, grooming: mB } : (typeof mB === 'object' && mB !== null ? mB : {});
 
+      const allSubKeys = new Set([...Object.keys(objA), ...Object.keys(objB)]);
       const subMerged = {};
-
-      if (objA.welcome !== undefined && objB.welcome === undefined) {
-        subMerged.welcome = objA.welcome;
-      } else if (objB.welcome !== undefined && objA.welcome === undefined) {
-        subMerged.welcome = objB.welcome;
-      } else if (objA.welcome !== undefined && objB.welcome !== undefined) {
-        subMerged.welcome = objB.welcome ?? objA.welcome;
-      }
-
-      if (objA.grooming !== undefined && objB.grooming === undefined) {
-        subMerged.grooming = objA.grooming;
-      } else if (objB.grooming !== undefined && objA.grooming === undefined) {
-        subMerged.grooming = objB.grooming;
-      } else if (objA.grooming !== undefined && objB.grooming !== undefined) {
-        subMerged.grooming = objB.grooming ?? objA.grooming;
+      for (const subKey of allSubKeys) {
+        if (objB[subKey] !== undefined) {
+          subMerged[subKey] = objB[subKey];
+        } else if (objA[subKey] !== undefined) {
+          subMerged[subKey] = objA[subKey];
+        }
       }
 
       merged[staffId].behavior[mId] = subMerged;
@@ -852,7 +884,7 @@ export function hasAnyEvaluations() {
         const val = beh[mId];
         if (val !== null && val !== undefined) {
           if (typeof val === 'number') return true;
-          if (typeof val === 'object' && (val.welcome !== undefined || val.grooming !== undefined)) {
+          if (typeof val === 'object' && Object.values(val).some(v => v !== undefined && v !== null)) {
             return true;
           }
         }
@@ -940,18 +972,20 @@ export function getStaffProgressReport() {
   const staffList = getStaffUsers();
   const assignments = getBehaviorAssignments();
   const evaluations = getEvaluations();
+  const criteriaKeys = ['welcome', 'grooming', 'responsibility', 'volunteering', 'activity'];
 
   return staffList.map(staff => {
     const userEvals = evaluations[staff.id]?.behavior || {};
     const assignedIds = assignments[staff.id] || [];
     const behTotal = assignedIds.length;
 
-    // Completed if both 2.1 (welcome) and 2.2 (grooming) are evaluated
+    // Completed if all 5 criteria (2.1, 2.2, 3.1, 3.2, 3.3) are evaluated
     const behCompleted = assignedIds.filter(id => {
       const score = userEvals[id];
       if (score === null || score === undefined) return false;
       if (typeof score === 'number') return true;
-      return score.welcome !== undefined && score.grooming !== undefined;
+      if (typeof score !== 'object') return false;
+      return criteriaKeys.every(k => score[k] !== undefined && score[k] !== null);
     }).length;
 
     const behPercent = behTotal > 0 ? Math.round((behCompleted / behTotal) * 100) : 0;
@@ -968,7 +1002,7 @@ export function getStaffProgressReport() {
   });
 }
 
-// Calculate comprehensive results for Admin Dashboard (Behavior-Only Evaluation)
+// Calculate comprehensive results for Admin Dashboard (All 5 Criteria)
 // Rule: Each masseuse belongs to exactly 1 group, and can be evaluated by 1 evaluator only.
 export function calculateResults() {
   const masseusesList = getMasseuses();
@@ -994,27 +1028,34 @@ export function calculateResults() {
 
     let welcomeScore = null;
     let groomingScore = null;
-    let behaviorScore = null;
+    let responsibilityScore = null;
+    let volunteeringScore = null;
+    let activityScore = null;
 
     if (rawEval !== null && rawEval !== undefined) {
       if (typeof rawEval === 'number') {
         welcomeScore = rawEval;
         groomingScore = rawEval;
-        behaviorScore = rawEval;
+        responsibilityScore = rawEval;
+        volunteeringScore = rawEval;
+        activityScore = rawEval;
       } else if (typeof rawEval === 'object') {
         welcomeScore = rawEval.welcome ?? null;
         groomingScore = rawEval.grooming ?? null;
-        if (welcomeScore !== null && groomingScore !== null) {
-          behaviorScore = Math.round(((welcomeScore + groomingScore) / 2) * 10) / 10;
-        } else if (welcomeScore !== null) {
-          behaviorScore = welcomeScore;
-        } else if (groomingScore !== null) {
-          behaviorScore = groomingScore;
-        }
+        responsibilityScore = rawEval.responsibility ?? null;
+        volunteeringScore = rawEval.volunteering ?? null;
+        activityScore = rawEval.activity ?? null;
       }
     }
 
-    const totalScore = behaviorScore;
+    const validScores = [welcomeScore, groomingScore, responsibilityScore, volunteeringScore, activityScore]
+      .filter(s => s !== null && s !== undefined && typeof s === 'number');
+
+    const totalScore = validScores.length > 0
+      ? Math.round((validScores.reduce((a, b) => a + b, 0) / validScores.length) * 10) / 10
+      : null;
+
+    const behaviorScore = totalScore;
 
     return {
       masseuse: m,
@@ -1022,6 +1063,9 @@ export function calculateResults() {
       assignedBehaviorStaffName: assignedStaffName,
       welcomeScore,
       groomingScore,
+      responsibilityScore,
+      volunteeringScore,
+      activityScore,
       behaviorScore,
       totalScore
     };
@@ -1052,11 +1096,12 @@ export function seedMockEvaluations() {
 
     if (staff.isBehaviorEvaluator && assignments[staff.id]) {
       assignments[staff.id].forEach((mId, idx) => {
-        const welcome = Math.min(10, Math.max(6, 8 + (idx % 3) - Math.floor(Math.random() * 2)));
-        const grooming = Math.min(10, Math.max(7, 9 - (idx % 2) - Math.floor(Math.random() * 2)));
         mockEvals[staff.id].behavior[mId] = {
-          welcome,
-          grooming
+          welcome: Math.min(10, Math.max(6, 8 + (idx % 3) - Math.floor(Math.random() * 2))),
+          grooming: Math.min(10, Math.max(7, 9 - (idx % 2) - Math.floor(Math.random() * 2))),
+          responsibility: Math.min(10, Math.max(7, 8 + (idx % 2) - Math.floor(Math.random() * 2))),
+          volunteering: Math.min(10, Math.max(6, 9 - (idx % 3) - Math.floor(Math.random() * 2))),
+          activity: Math.min(10, Math.max(7, 8 + (idx % 3) - Math.floor(Math.random() * 2)))
         };
       });
     }

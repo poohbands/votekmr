@@ -331,7 +331,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
 
   const handleExportCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    csvContent += "อันดับ,รหัส,ชื่อหมอนวด,ผู้ประเมินพฤติกรรม,ข้อ 2.1 การต้อนรับ,ข้อ 2.2 การแต่งกาย,คะแนนรวมเฉลี่ยพฤติกรรม\n";
+    csvContent += "อันดับ,รหัส,ชื่อหมอนวด,ผู้ประเมินพฤติกรรม,ข้อ 2.1 การต้อนรับ,ข้อ 2.2 การแต่งกาย,ข้อ 3.1 การรับผิดชอบต่องาน,ข้อ 3.2 จิตอาสาช่วยเหลือ,ข้อ 3.3 เข้าร่วมกิจกรรม,คะแนนรวมเฉลี่ย\n";
 
     results.forEach(item => {
       const row = [
@@ -341,6 +341,9 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
         `"${item.assignedBehaviorStaffName}"`,
         item.welcomeScore !== null ? item.welcomeScore : '-',
         item.groomingScore !== null ? item.groomingScore : '-',
+        item.responsibilityScore !== null ? item.responsibilityScore : '-',
+        item.volunteeringScore !== null ? item.volunteeringScore : '-',
+        item.activityScore !== null ? item.activityScore : '-',
         item.totalScore !== null ? item.totalScore.toFixed(2) : '-'
       ].join(",");
       csvContent += row + "\n";
@@ -428,6 +431,12 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
     displayedResults.sort((a, b) => (b.welcomeScore || 0) - (a.welcomeScore || 0));
   } else if (sortBy === 'grooming') {
     displayedResults.sort((a, b) => (b.groomingScore || 0) - (a.groomingScore || 0));
+  } else if (sortBy === 'responsibility') {
+    displayedResults.sort((a, b) => (b.responsibilityScore || 0) - (a.responsibilityScore || 0));
+  } else if (sortBy === 'volunteering') {
+    displayedResults.sort((a, b) => (b.volunteeringScore || 0) - (a.volunteeringScore || 0));
+  } else if (sortBy === 'activity') {
+    displayedResults.sort((a, b) => (b.activityScore || 0) - (a.activityScore || 0));
   } else if (sortBy === 'name') {
     displayedResults.sort((a, b) => a.masseuse.name.localeCompare(b.masseuse.name, 'th'));
   } else {
@@ -452,7 +461,22 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
     ? (validGroomingScores.reduce((a, b) => a + b, 0) / validGroomingScores.length).toFixed(2)
     : '-';
 
-  const validBehaviorScores = results.map(r => r.behaviorScore).filter(s => s !== null && s !== undefined);
+  const validRespScores = results.map(r => r.responsibilityScore).filter(s => s !== null && s !== undefined);
+  const avgRespOverall = validRespScores.length > 0
+    ? (validRespScores.reduce((a, b) => a + b, 0) / validRespScores.length).toFixed(2)
+    : '-';
+
+  const validVolScores = results.map(r => r.volunteeringScore).filter(s => s !== null && s !== undefined);
+  const avgVolOverall = validVolScores.length > 0
+    ? (validVolScores.reduce((a, b) => a + b, 0) / validVolScores.length).toFixed(2)
+    : '-';
+
+  const validActScores = results.map(r => r.activityScore).filter(s => s !== null && s !== undefined);
+  const avgActOverall = validActScores.length > 0
+    ? (validActScores.reduce((a, b) => a + b, 0) / validActScores.length).toFixed(2)
+    : '-';
+
+  const validBehaviorScores = results.map(r => r.totalScore).filter(s => s !== null && s !== undefined);
   const avgBehaviorOverall = validBehaviorScores.length > 0
     ? (validBehaviorScores.reduce((a, b) => a + b, 0) / validBehaviorScores.length).toFixed(2)
     : '-';
@@ -722,6 +746,45 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
             การแต่งกาย สุภาพเรียบร้อย เหมาะสม
           </div>
         </div>
+
+        {/* Card 5: Avg Responsibility Score */}
+        <div className="glass-panel" style={{ padding: '20px' }}>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 500 }}>
+            💼 คะแนนเฉลี่ย 3.1 (ความรับผิดชอบ)
+          </div>
+          <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#38bdf8' }}>
+            {avgRespOverall} <span style={{ fontSize: '0.9rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ 10</span>
+          </div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+            การรับผิดชอบต่องานและหน้าที่
+          </div>
+        </div>
+
+        {/* Card 6: Avg Volunteering Score */}
+        <div className="glass-panel" style={{ padding: '20px' }}>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 500 }}>
+            😊 คะแนนเฉลี่ย 3.2 (จิตอาสา)
+          </div>
+          <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#fb7185' }}>
+            {avgVolOverall} <span style={{ fontSize: '0.9rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ 10</span>
+          </div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+            จิตอาสาช่วยเหลือเพื่อนร่วมงาน/จนท.
+          </div>
+        </div>
+
+        {/* Card 7: Avg Activity Score */}
+        <div className="glass-panel" style={{ padding: '20px' }}>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 500 }}>
+            📅 คะแนนเฉลี่ย 3.3 (ร่วมกิจกรรม)
+          </div>
+          <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#facc15' }}>
+            {avgActOverall} <span style={{ fontSize: '0.9rem', fontWeight: 400, color: 'var(--text-muted)' }}>/ 10</span>
+          </div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+            เข้าร่วมกิจกรรมหรืองานหน่วยงาน
+          </div>
+        </div>
       </div>
 
       {/* Information Banner about Evaluator Grouping & Quick Scope Filters */}
@@ -835,6 +898,9 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                 <option value="rank">ตามอันดับคะแนนรวม (Rank)</option>
                 <option value="welcome">คะแนนการต้อนรับสูงสุด (2.1)</option>
                 <option value="grooming">คะแนนการแต่งกายสูงสุด (2.2)</option>
+                <option value="responsibility">คะแนนความรับผิดชอบสูงสุด (3.1)</option>
+                <option value="volunteering">คะแนนจิตอาสาสูงสุด (3.2)</option>
+                <option value="activity">คะแนนร่วมกิจกรรมสูงสุด (3.3)</option>
                 <option value="name">เรียงตามชื่อ</option>
               </select>
             </>
@@ -878,17 +944,28 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>อันดับ</th>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>ชื่อหมอนวด</th>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>ผู้ประเมิน</th>
-                <th style={{ padding: '14px 16px', fontWeight: 600, color: '#38bdf8' }}>ข้อ 2.1 การต้อนรับ (10)</th>
-                <th style={{ padding: '14px 16px', fontWeight: 600, color: '#fb7185' }}>ข้อ 2.2 การแต่งกาย (10)</th>
-                <th style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--accent-gold)' }}>คะแนนเฉลี่ยพฤติกรรม</th>
+                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#a78bfa', textAlign: 'center' }}>2.1 ต้อนรับ (10)</th>
+                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#2dd4bf', textAlign: 'center' }}>2.2 แต่งกาย (10)</th>
+                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#38bdf8', textAlign: 'center' }}>3.1 หน้าที่ (10)</th>
+                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#fb7185', textAlign: 'center' }}>3.2 จิตอาสา (10)</th>
+                <th style={{ padding: '14px 12px', fontWeight: 600, color: '#facc15', textAlign: 'center' }}>3.3 กิจกรรม (10)</th>
+                <th style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--accent-gold)' }}>คะแนนรวมเฉลี่ย</th>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>สถานะการประเมิน</th>
               </tr>
             </thead>
             <tbody>
               {displayedResults.map(item => {
                 const isTop3 = item.rank <= 3 && item.rank !== '-';
-                const isComplete = item.welcomeScore !== null && item.groomingScore !== null;
-                const isPartial = (item.welcomeScore !== null || item.groomingScore !== null) && !isComplete;
+                const criteriaScores = [
+                  item.welcomeScore,
+                  item.groomingScore,
+                  item.responsibilityScore,
+                  item.volunteeringScore,
+                  item.activityScore
+                ];
+                const ratedCount = criteriaScores.filter(s => s !== null).length;
+                const isComplete = ratedCount === 5;
+                const isPartial = ratedCount > 0 && !isComplete;
 
                 return (
                   <tr
@@ -925,23 +1002,53 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                       </span>
                     </td>
 
-                    <td style={{ padding: '14px 16px' }}>
+                    <td style={{ padding: '14px 12px', textAlign: 'center' }}>
                       {item.welcomeScore !== null ? (
-                        <span style={{ fontWeight: 700, color: '#38bdf8', fontSize: '1rem' }}>
-                          {item.welcomeScore} / 10
+                        <span style={{ fontWeight: 700, color: '#a78bfa', fontSize: '0.95rem' }}>
+                          {item.welcomeScore}
                         </span>
                       ) : (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>ยังไม่ประเมิน</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>-</span>
                       )}
                     </td>
 
-                    <td style={{ padding: '14px 16px' }}>
+                    <td style={{ padding: '14px 12px', textAlign: 'center' }}>
                       {item.groomingScore !== null ? (
-                        <span style={{ fontWeight: 700, color: '#fb7185', fontSize: '1rem' }}>
-                          {item.groomingScore} / 10
+                        <span style={{ fontWeight: 700, color: '#2dd4bf', fontSize: '0.95rem' }}>
+                          {item.groomingScore}
                         </span>
                       ) : (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>ยังไม่ประเมิน</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>-</span>
+                      )}
+                    </td>
+
+                    <td style={{ padding: '14px 12px', textAlign: 'center' }}>
+                      {item.responsibilityScore !== null ? (
+                        <span style={{ fontWeight: 700, color: '#38bdf8', fontSize: '0.95rem' }}>
+                          {item.responsibilityScore}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>-</span>
+                      )}
+                    </td>
+
+                    <td style={{ padding: '14px 12px', textAlign: 'center' }}>
+                      {item.volunteeringScore !== null ? (
+                        <span style={{ fontWeight: 700, color: '#fb7185', fontSize: '0.95rem' }}>
+                          {item.volunteeringScore}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>-</span>
+                      )}
+                    </td>
+
+                    <td style={{ padding: '14px 12px', textAlign: 'center' }}>
+                      {item.activityScore !== null ? (
+                        <span style={{ fontWeight: 700, color: '#facc15', fontSize: '0.95rem' }}>
+                          {item.activityScore}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>-</span>
                       )}
                     </td>
 
@@ -967,13 +1074,13 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                     <td style={{ padding: '14px 16px' }}>
                       {isComplete ? (
                         <span className="badge badge-teal" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          <CheckCircle2 size={13} /> ประเมินเสร็จสิ้น
+                          <CheckCircle2 size={13} /> ครบ 5 ข้อ
                         </span>
                       ) : isPartial ? (
-                        <span className="badge badge-gold">ประเมินบางข้อ</span>
+                        <span className="badge badge-gold">{ratedCount}/5 ข้อ</span>
                       ) : (
                         <span className="badge" style={{ background: 'rgba(255, 255, 255, 0.06)', color: 'var(--text-secondary)' }}>
-                          รอ {item.assignedBehaviorStaffName} ประเมิน
+                          รอ {item.assignedBehaviorStaffName}
                         </span>
                       )}
                     </td>
@@ -988,10 +1095,16 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
       {/* VIEW 2: FULL BREAKDOWN MATRIX TABLE (กลุ่มผู้ประเมิน 6 คน คนละ 5 ราย) */}
       {viewMode === 'matrix' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px' }}>
             {staffUsers.filter(s => s.isBehaviorEvaluator).map(evaluator => {
               const assignedMasseuses = results.filter(r => r.assignedBehaviorStaffId === evaluator.id);
-              const completedCount = assignedMasseuses.filter(r => r.welcomeScore !== null && r.groomingScore !== null).length;
+              const completedCount = assignedMasseuses.filter(r => 
+                r.welcomeScore !== null && 
+                r.groomingScore !== null && 
+                r.responsibilityScore !== null && 
+                r.volunteeringScore !== null && 
+                r.activityScore !== null
+              ).length;
               const isAllDone = assignedMasseuses.length > 0 && completedCount === assignedMasseuses.length;
 
               return (
@@ -1048,16 +1161,19 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-                        <th style={{ padding: '6px 8px' }}>หมอนวด</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'center', color: '#38bdf8' }}>2.1 ต้อนรับ</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'center', color: '#fb7185' }}>2.2 แต่งกาย</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'center', color: 'var(--accent-gold)' }}>เฉลี่ย</th>
+                        <th style={{ padding: '6px 6px' }}>หมอนวด</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#a78bfa' }}>2.1</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#2dd4bf' }}>2.2</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#38bdf8' }}>3.1</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#fb7185' }}>3.2</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#facc15' }}>3.3</th>
+                        <th style={{ padding: '6px 6px', textAlign: 'center', color: 'var(--accent-gold)' }}>เฉลี่ย</th>
                       </tr>
                     </thead>
                     <tbody>
                       {assignedMasseuses.map((item, idx) => (
                         <tr key={item.masseuse.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                          <td style={{ padding: '8px' }}>
+                          <td style={{ padding: '8px 6px' }}>
                             <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                               {idx + 1}. {item.masseuse.name}
                             </div>
@@ -1065,13 +1181,22 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                               {item.masseuse.code}
                             </div>
                           </td>
-                          <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600, color: item.welcomeScore !== null ? '#38bdf8' : 'var(--text-muted)' }}>
+                          <td style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, color: item.welcomeScore !== null ? '#a78bfa' : 'var(--text-muted)' }}>
                             {item.welcomeScore !== null ? item.welcomeScore : '-'}
                           </td>
-                          <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600, color: item.groomingScore !== null ? '#fb7185' : 'var(--text-muted)' }}>
+                          <td style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, color: item.groomingScore !== null ? '#2dd4bf' : 'var(--text-muted)' }}>
                             {item.groomingScore !== null ? item.groomingScore : '-'}
                           </td>
-                          <td style={{ padding: '8px', textAlign: 'center', fontWeight: 700, color: item.totalScore !== null ? 'var(--accent-gold)' : 'var(--text-muted)' }}>
+                          <td style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, color: item.responsibilityScore !== null ? '#38bdf8' : 'var(--text-muted)' }}>
+                            {item.responsibilityScore !== null ? item.responsibilityScore : '-'}
+                          </td>
+                          <td style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, color: item.volunteeringScore !== null ? '#fb7185' : 'var(--text-muted)' }}>
+                            {item.volunteeringScore !== null ? item.volunteeringScore : '-'}
+                          </td>
+                          <td style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, color: item.activityScore !== null ? '#facc15' : 'var(--text-muted)' }}>
+                            {item.activityScore !== null ? item.activityScore : '-'}
+                          </td>
+                          <td style={{ padding: '6px 6px', textAlign: 'center', fontWeight: 700, color: item.totalScore !== null ? 'var(--accent-gold)' : 'var(--text-muted)' }}>
                             {item.totalScore !== null ? item.totalScore.toFixed(1) : '-'}
                           </td>
                         </tr>
@@ -1160,7 +1285,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
                         }} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        <span>หัวข้อ 2.1 การต้อนรับ & 2.2 การแต่งกาย</span>
+                        <span>หัวข้อ 2.1-2.2 และ 3.1-3.3 (รวม 5 ข้อ)</span>
                         <span>{item.isFullyCompleted ? 'ประเมินครบถ้วน' : `คงเหลือ ${item.behTotal - item.behCompleted} คน`}</span>
                       </div>
                     </div>

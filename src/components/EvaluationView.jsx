@@ -7,7 +7,8 @@ import {
   isEvaluationClosed,
   getSystemSettings,
   pushToCloud,
-  pullFromCloud
+  pullFromCloud,
+  EVALUATION_CRITERIA
 } from '../data/mockData';
 import {
   Award,
@@ -19,10 +20,41 @@ import {
   Clock,
   HeartHandshake,
   Shirt,
+  Briefcase,
+  Smile,
+  CalendarCheck,
   Save
 } from 'lucide-react';
 
 import confetti from 'canvas-confetti';
+
+const CRITERIA_ICONS = {
+  welcome: HeartHandshake,
+  grooming: Shirt,
+  responsibility: Briefcase,
+  volunteering: Smile,
+  activity: CalendarCheck
+};
+
+const CRITERIA_CONFIG = EVALUATION_CRITERIA.map(c => ({
+  ...c,
+  icon: CRITERIA_ICONS[c.key] || Award
+}));
+
+const CATEGORY_GROUPS = [
+  {
+    categoryName: 'ข้อ 2: พฤติกรรมบริการ',
+    badgeColor: '#c084fc',
+    badgeBg: 'rgba(192, 132, 252, 0.12)',
+    criteria: CRITERIA_CONFIG.filter(c => c.code.startsWith('2.'))
+  },
+  {
+    categoryName: 'ข้อ 3: ความรับผิดชอบและการมีส่วนร่วม',
+    badgeColor: '#38bdf8',
+    badgeBg: 'rgba(56, 189, 248, 0.12)',
+    criteria: CRITERIA_CONFIG.filter(c => c.code.startsWith('3.'))
+  }
+];
 
 export default function EvaluationView({ currentUser }) {
   const [masseuses, setMasseuses] = useState([]);
@@ -145,6 +177,8 @@ export default function EvaluationView({ currentUser }) {
 
 
 
+  const CRITERIA_KEYS = ['welcome', 'grooming', 'responsibility', 'volunteering', 'activity'];
+
   const checkCompletion = (currentEvals) => {
     const userBehavior = currentEvals[currentUser.id]?.behavior || {};
     const assignedIds = assignments[currentUser.id] || [];
@@ -152,9 +186,8 @@ export default function EvaluationView({ currentUser }) {
     
     const isAllDone = targetIds.length > 0 && targetIds.every(id => {
       const evalItem = userBehavior[id];
-      if (!evalItem) return false;
-      if (typeof evalItem === 'number') return true;
-      return evalItem.welcome !== undefined && evalItem.grooming !== undefined;
+      if (!evalItem || typeof evalItem !== 'object') return false;
+      return CRITERIA_KEYS.every(k => evalItem[k] !== undefined && evalItem[k] !== null);
     });
 
     if (isAllDone) {
@@ -172,17 +205,10 @@ export default function EvaluationView({ currentUser }) {
                           m.code.toLowerCase().includes(searchTerm.toLowerCase());
     const evalItem = userBehaviorEvals[m.id];
     let isFullyDone = false;
-    let isPartiallyDone = false;
 
-    if (evalItem) {
-      if (typeof evalItem === 'number') {
-        isFullyDone = true;
-      } else {
-        const hasWelcome = evalItem.welcome !== undefined;
-        const hasGrooming = evalItem.grooming !== undefined;
-        isFullyDone = hasWelcome && hasGrooming;
-        isPartiallyDone = hasWelcome || hasGrooming;
-      }
+    if (evalItem && typeof evalItem === 'object') {
+      const ratedCount = CRITERIA_KEYS.filter(k => evalItem[k] !== undefined && evalItem[k] !== null).length;
+      isFullyDone = ratedCount === CRITERIA_KEYS.length;
     }
 
     if (statusFilter === 'pending') return matchesSearch && !isFullyDone;
@@ -193,9 +219,8 @@ export default function EvaluationView({ currentUser }) {
   const totalToEvaluate = activeMasseuseList.length;
   const completedCount = activeMasseuseList.filter(m => {
     const item = userBehaviorEvals[m.id];
-    if (!item) return false;
-    if (typeof item === 'number') return true;
-    return item.welcome !== undefined && item.grooming !== undefined;
+    if (!item || typeof item !== 'object') return false;
+    return CRITERIA_KEYS.every(k => item[k] !== undefined && item[k] !== null);
   }).length;
 
   const progressPercent = totalToEvaluate > 0 ? Math.round((completedCount / totalToEvaluate) * 100) : 0;
@@ -276,7 +301,7 @@ export default function EvaluationView({ currentUser }) {
               </span>
             </div>
             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-              คุณ <strong>{currentUser.name}</strong> ได้รับมอบหมายประเมินหมอนวดจำนวน <strong>{totalToEvaluate} คน</strong> โดยประเมิน 2 หัวข้อย่อย (คะแนน 1 - 10)
+              คุณ <strong>{currentUser.name}</strong> ได้รับมอบหมายประเมินหมอนวดจำนวน <strong>{totalToEvaluate} คน</strong> โดยประเมินครบ 5 หัวข้อย่อย (คะแนน 1 - 10)
             </p>
           </div>
 
@@ -287,7 +312,7 @@ export default function EvaluationView({ currentUser }) {
                 {completedCount} / {totalToEvaluate} คน
               </div>
               <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                ประเมินครบทั้ง 2 ข้อ ({progressPercent}%)
+                ประเมินครบทั้ง 5 ข้อ ({progressPercent}%)
               </div>
             </div>
 
@@ -326,51 +351,37 @@ export default function EvaluationView({ currentUser }) {
         padding: '16px 20px',
         marginBottom: '24px',
         borderRadius: '16px',
-        background: 'rgba(139, 92, 246, 0.08)',
-        border: '1px solid rgba(139, 92, 246, 0.25)',
+        background: 'rgba(255, 255, 255, 0.03)',
+        border: '1px solid var(--border-color)',
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap: '14px'
+        gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+        gap: '12px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-          <div style={{
-            background: 'rgba(139, 92, 246, 0.2)',
-            color: '#a78bfa',
-            padding: '8px',
-            borderRadius: '10px',
-            marginTop: '2px'
-          }}>
-            <HeartHandshake size={20} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#ddd6fe' }}>
-              หัวข้อ 2.1: การต้อนรับ ดูแลผู้มารับบริการ
+        {CRITERIA_CONFIG.map(crit => {
+          const IconComp = crit.icon;
+          return (
+            <div key={crit.key} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+              <div style={{
+                background: `${crit.color}22`,
+                color: crit.color,
+                padding: '8px',
+                borderRadius: '10px',
+                marginTop: '2px',
+                flexShrink: 0
+              }}>
+                <IconComp size={18} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.86rem', color: crit.color }}>
+                  {crit.code} {crit.shortTitle.replace(/^[0-9.]+\s*/, '')}
+                </div>
+                <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: 1.3 }}>
+                  {crit.description}
+                </div>
+              </div>
             </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              ตั้งแต่เริ่ม จบเสร็จสิ้นบริการ ไหว้ ยิ้มแย้ม เอาใจใส่สอบถาม
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-          <div style={{
-            background: 'rgba(20, 184, 166, 0.2)',
-            color: '#2dd4bf',
-            padding: '8px',
-            borderRadius: '10px',
-            marginTop: '2px'
-          }}>
-            <Shirt size={20} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#99f6e4' }}>
-              หัวข้อ 2.2: การแต่งกาย สุภาพเรียบร้อย เหมาะสม
-            </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              ยูนิฟอร์มสะอาด ทรงผมเรียบร้อย ถูกสุขอนามัย และกาลเทศะ
-            </div>
-          </div>
-        </div>
+          );
+        })}
       </div>
 
       {/* Search & Filter Header */}
@@ -417,29 +428,23 @@ export default function EvaluationView({ currentUser }) {
         </div>
       </div>
 
-      {/* Masseuses 2-Criteria Evaluation Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: '20px' }}>
+      {/* Masseuses 5-Criteria Evaluation Cards Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: '24px' }}>
         {filteredList.map(m => {
-          const evalItem = userBehaviorEvals[m.id];
-          let welcomeScore = null;
-          let groomingScore = null;
+          const evalItem = userBehaviorEvals[m.id] || {};
+          const scores = {};
+          CRITERIA_CONFIG.forEach(c => {
+            scores[c.key] = evalItem?.[c.key] !== undefined && evalItem?.[c.key] !== null ? Number(evalItem[c.key]) : null;
+          });
 
-          if (evalItem !== undefined && evalItem !== null) {
-            if (typeof evalItem === 'number') {
-              welcomeScore = evalItem;
-              groomingScore = evalItem;
-            } else if (typeof evalItem === 'object') {
-              welcomeScore = evalItem.welcome ?? null;
-              groomingScore = evalItem.grooming ?? null;
-            }
-          }
+          const ratedCount = CRITERIA_CONFIG.filter(c => scores[c.key] !== null).length;
+          const isFullyRated = ratedCount === CRITERIA_CONFIG.length;
+          const isPartiallyRated = ratedCount > 0 && !isFullyRated;
 
-          const hasWelcome = welcomeScore !== null;
-          const hasGrooming = groomingScore !== null;
-          const isFullyRated = hasWelcome && hasGrooming;
-          const avgScore = isFullyRated
-            ? Math.round(((welcomeScore + groomingScore) / 2) * 10) / 10
-            : (hasWelcome ? welcomeScore : (hasGrooming ? groomingScore : null));
+          const validScores = CRITERIA_CONFIG.map(c => scores[c.key]).filter(s => s !== null);
+          const avgScore = validScores.length > 0
+            ? Math.round((validScores.reduce((a, b) => a + b, 0) / validScores.length) * 10) / 10
+            : null;
 
           return (
             <div
@@ -485,12 +490,12 @@ export default function EvaluationView({ currentUser }) {
                 {isFullyRated ? (
                   <div style={{ textAlign: 'right' }}>
                     <span className="badge badge-teal" style={{ padding: '6px 12px', fontSize: '0.82rem' }}>
-                      <Check size={14} /> ครบ 2 ข้อ (เฉลี่ย {avgScore})
+                      <Check size={14} /> ครบ 5 ข้อ (เฉลี่ย {avgScore})
                     </span>
                   </div>
-                ) : (hasWelcome || hasGrooming) ? (
+                ) : isPartiallyRated ? (
                   <span className="badge badge-gold" style={{ padding: '6px 12px', fontSize: '0.82rem' }}>
-                    ทำแล้ว 1/2 ข้อ
+                    ทำแล้ว {ratedCount}/5 ข้อ
                   </span>
                 ) : (
                   <span className="badge badge-gray" style={{ padding: '6px 12px', fontSize: '0.82rem' }}>
@@ -499,93 +504,76 @@ export default function EvaluationView({ currentUser }) {
                 )}
               </div>
 
-              {/* Sub-Criteria 2.1: Welcome & Care */}
-              <div style={{ marginBottom: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    <HeartHandshake size={16} color="#a78bfa" />
-                    <span>2.1 การต้อนรับ ดูแลผู้มารับบริการ</span>
+              {/* Evaluation Categories and Criteria */}
+              {CATEGORY_GROUPS.map((group, groupIdx) => (
+                <div key={group.categoryName} style={{ marginBottom: groupIdx === 0 ? '20px' : '10px' }}>
+                  <div style={{
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    color: group.badgeColor,
+                    background: group.badgeBg,
+                    padding: '3px 10px',
+                    borderRadius: '6px',
+                    marginBottom: '12px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    {group.categoryName}
                   </div>
-                  {welcomeScore !== null ? (
-                    <span style={{ fontSize: '0.92rem', fontWeight: 700, color: '#a78bfa' }}>
-                      {welcomeScore} / 10
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>ยังไม่ได้ลงคะแนน</span>
-                  )}
-                </div>
 
-                {/* 1 - 10 Buttons for 2.1 */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '4px' }}>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(scoreNum => {
-                    const isSelected = welcomeScore === scoreNum;
-                    return (
-                      <button
-                        key={scoreNum}
-                        type="button"
-                        disabled={isClosed && currentUser.role !== 'admin'}
-                        onClick={() => handleSubScoreChange(m.id, 'welcome', scoreNum)}
-                        className={`rating-button ${isSelected ? 'active' : ''}`}
-                        style={{
-                          width: '100%',
-                          height: '34px',
-                          fontSize: '0.85rem',
-                          background: isSelected ? 'linear-gradient(135deg, #8b5cf6, #6d28d9)' : undefined,
-                          borderColor: isSelected ? '#8b5cf6' : undefined,
-                          cursor: isClosed && currentUser.role !== 'admin' ? 'not-allowed' : 'pointer',
-                          opacity: isClosed && currentUser.role !== 'admin' ? 0.6 : 1
-                        }}
-                      >
-                        {scoreNum}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {group.criteria.map(crit => {
+                      const IconComp = crit.icon;
+                      const currentScore = scores[crit.key];
+                      return (
+                        <div key={crit.key}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              <IconComp size={16} color={crit.color} />
+                              <span>{crit.shortTitle}</span>
+                            </div>
+                            {currentScore !== null ? (
+                              <span style={{ fontSize: '0.92rem', fontWeight: 700, color: crit.color }}>
+                                {currentScore} / 10
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>ยังไม่ได้ลงคะแนน</span>
+                            )}
+                          </div>
 
-              {/* Sub-Criteria 2.2: Grooming & Uniform */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    <Shirt size={16} color="#2dd4bf" />
-                    <span>2.2 การแต่งกาย สุภาพเรียบร้อย เหมาะสม</span>
+                          {/* 1 - 10 Rating Buttons */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '4px' }}>
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(scoreNum => {
+                              const isSelected = currentScore === scoreNum;
+                              return (
+                                <button
+                                  key={scoreNum}
+                                  type="button"
+                                  disabled={isClosed && currentUser.role !== 'admin'}
+                                  onClick={() => handleSubScoreChange(m.id, crit.key, scoreNum)}
+                                  className={`rating-button ${isSelected ? 'active' : ''}`}
+                                  style={{
+                                    width: '100%',
+                                    height: '34px',
+                                    fontSize: '0.85rem',
+                                    background: isSelected ? crit.gradient : undefined,
+                                    borderColor: isSelected ? crit.color : undefined,
+                                    cursor: isClosed && currentUser.role !== 'admin' ? 'not-allowed' : 'pointer',
+                                    opacity: isClosed && currentUser.role !== 'admin' ? 0.6 : 1
+                                  }}
+                                >
+                                  {scoreNum}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {groomingScore !== null ? (
-                    <span style={{ fontSize: '0.92rem', fontWeight: 700, color: '#2dd4bf' }}>
-                      {groomingScore} / 10
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>ยังไม่ได้ลงคะแนน</span>
-                  )}
                 </div>
-
-                {/* 1 - 10 Buttons for 2.2 */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '4px' }}>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(scoreNum => {
-                    const isSelected = groomingScore === scoreNum;
-                    return (
-                      <button
-                        key={scoreNum}
-                        type="button"
-                        disabled={isClosed && currentUser.role !== 'admin'}
-                        onClick={() => handleSubScoreChange(m.id, 'grooming', scoreNum)}
-                        className={`rating-button ${isSelected ? 'active' : ''}`}
-                        style={{
-                          width: '100%',
-                          height: '34px',
-                          fontSize: '0.85rem',
-                          background: isSelected ? 'linear-gradient(135deg, #14b8a6, #0d9488)' : undefined,
-                          borderColor: isSelected ? '#14b8a6' : undefined,
-                          cursor: isClosed && currentUser.role !== 'admin' ? 'not-allowed' : 'pointer',
-                          opacity: isClosed && currentUser.role !== 'admin' ? 0.6 : 1
-                        }}
-                      >
-                        {scoreNum}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              ))}
 
               {/* Card Footer: Rating Summary */}
               <div style={{
@@ -599,15 +587,15 @@ export default function EvaluationView({ currentUser }) {
               }}>
                 {isFullyRated ? (
                   <span style={{ color: '#2dd4bf', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-                    <CheckCircle2 size={16} /> ประเมินครบ 2 ข้อแล้ว (เฉลี่ย {avgScore} คะแนน)
+                    <CheckCircle2 size={16} /> ประเมินครบทั้ง 5 ข้อแล้ว (เฉลี่ย {avgScore} คะแนน)
                   </span>
-                ) : (hasWelcome || hasGrooming) ? (
+                ) : isPartiallyRated ? (
                   <span style={{ color: '#f59e0b', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <AlertCircle size={14} /> ยังค้างอีก 1 ข้อที่ยังไม่ได้ลงคะแนน
+                    <AlertCircle size={14} /> ยังค้างอีก {5 - ratedCount} ข้อที่ยังไม่ได้ลงคะแนน
                   </span>
                 ) : (
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                    รอการลงคะแนน (กดเลือกคะแนน 1 - 10)
+                    รอการลงคะแนน (กดเลือกคะแนน 1 - 10 ให้ครบ 5 ข้อ)
                   </span>
                 )}
               </div>
@@ -779,10 +767,11 @@ export default function EvaluationView({ currentUser }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {assignedMasseuses.map(m => {
                   const evalItem = userBehaviorEvals[m.id];
-                  const w = typeof evalItem === 'object' ? evalItem?.welcome : evalItem;
-                  const g = typeof evalItem === 'object' ? evalItem?.grooming : evalItem;
-                  const avg = (w !== null && g !== null && w !== undefined && g !== undefined)
-                    ? Math.round(((Number(w) + Number(g)) / 2) * 10) / 10
+                  const vals = (typeof evalItem === 'object' && evalItem !== null)
+                    ? Object.values(evalItem).filter(v => typeof v === 'number')
+                    : [];
+                  const avg = vals.length > 0
+                    ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10
                     : '-';
                   return (
                     <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
