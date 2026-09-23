@@ -6,21 +6,21 @@ import {
   saveBehaviorSubScore,
   isEvaluationClosed,
   getSystemSettings,
-  BEHAVIOR_SUB_CRITERIA
+  pushToCloud
 } from '../data/mockData';
 import {
   Award,
   CheckCircle2,
   AlertCircle,
-  Sparkles,
   Search,
   Check,
   Lock,
   Clock,
   HeartHandshake,
   Shirt,
-  UserCheck
+  Save
 } from 'lucide-react';
+
 import confetti from 'canvas-confetti';
 
 export default function EvaluationView({ currentUser }) {
@@ -32,6 +32,11 @@ export default function EvaluationView({ currentUser }) {
   const [toastMessage, setToastMessage] = useState('');
   const [systemSettings, setSystemSettings] = useState({});
   const [isClosed, setIsClosed] = useState(false);
+  const [savingCardId, setSavingCardId] = useState(null);
+  const [savedCardIds, setSavedCardIds] = useState(new Set());
+  const [isGlobalSaving, setIsGlobalSaving] = useState(false);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+
 
   useEffect(() => {
     const loadedMasseuses = getMasseuses();
@@ -61,12 +66,56 @@ export default function EvaluationView({ currentUser }) {
     try {
       const updated = saveBehaviorSubScore(currentUser.id, masseuseId, subKey, score);
       setEvaluations({ ...updated });
-      showToast(`บันทึกคะแนน ${score} คะแนนเรียบร้อย`);
+      setSavedCardIds(prev => {
+        const next = new Set(prev);
+        next.delete(masseuseId);
+        return next;
+      });
+      showToast(`เลือกคะแนน ${score} คะแนนเรียบร้อย`);
       checkCompletion(updated);
     } catch (err) {
       alert(err.message);
     }
   };
+
+  const handleSaveCard = async (m) => {
+    if (isClosed && currentUser.role !== 'admin') {
+      alert('ระบบปิดรับการประเมินแล้ว ไม่สามารถบันทึกหรือเปลี่ยนคะแนนได้');
+      return;
+    }
+    setSavingCardId(m.id);
+    try {
+      await pushToCloud();
+      setSavedCardIds(prev => new Set([...prev, m.id]));
+      showToast(`บันทึกข้อมูลของ ${m.name} เรียบร้อยแล้ว`);
+    } catch (err) {
+      alert(`บันทึกไม่สำเร็จ: ${err.message}`);
+    } finally {
+      setSavingCardId(null);
+    }
+  };
+
+  const handleSaveAll = async () => {
+    if (isClosed && currentUser.role !== 'admin') {
+      alert('ระบบปิดรับการประเมินแล้ว');
+      return;
+    }
+    setIsGlobalSaving(true);
+    try {
+      await pushToCloud();
+      setSavedCardIds(new Set(assignedMasseuses.map(m => m.id)));
+      showToast('บันทึกข้อมูลการประเมินทั้งหมดเรียบร้อยแล้ว');
+      if (completedCount === totalToEvaluate && totalToEvaluate > 0) {
+        confetti({ particleCount: 140, spread: 80, origin: { y: 0.6 } });
+        setIsSuccessModalOpen(true);
+      }
+    } catch (err) {
+      alert(`บันทึกไม่สำเร็จ: ${err.message}`);
+    } finally {
+      setIsGlobalSaving(false);
+    }
+  };
+
 
   const checkCompletion = (currentEvals) => {
     const userBehavior = currentEvals[currentUser.id]?.behavior || {};
@@ -505,6 +554,66 @@ export default function EvaluationView({ currentUser }) {
                   })}
                 </div>
               </div>
+
+              {/* Card Footer: Save Button & Rating Summary */}
+              <div style={{
+                marginTop: '18px',
+                paddingTop: '14px',
+                borderTop: '1px solid var(--border-color)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '10px'
+              }}>
+                <div style={{ fontSize: '0.84rem' }}>
+                  {isFullyRated ? (
+                    <span style={{ color: '#2dd4bf', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                      <CheckCircle2 size={16} /> ประเมินครบ 2 ข้อ (เฉลี่ย {avgScore} คะแนน)
+                    </span>
+                  ) : (hasWelcome || hasGrooming) ? (
+                    <span style={{ color: '#f59e0b', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <AlertCircle size={14} /> ยังค้างอีก 1 ข้อที่ยังไม่ได้ลงคะแนน
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                      กรุณากดเลือกคะแนน 2.1 และ 2.2
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={(!hasWelcome && !hasGrooming) || (isClosed && currentUser.role !== 'admin') || savingCardId === m.id}
+                  onClick={() => handleSaveCard(m)}
+                  className={`btn ${isFullyRated ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{
+                    padding: '8px 18px',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    borderRadius: 'var(--radius-md)',
+                    background: isFullyRated ? 'linear-gradient(135deg, #14b8a6, #0d9488)' : undefined,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: (!hasWelcome && !hasGrooming) || (isClosed && currentUser.role !== 'admin') ? 'not-allowed' : 'pointer',
+                    opacity: (!hasWelcome && !hasGrooming) ? 0.6 : 1
+                  }}
+                >
+                  {savingCardId === m.id ? (
+                    <span>กำลังบันทึก...</span>
+                  ) : savedCardIds.has(m.id) ? (
+                    <>
+                      <Check size={16} /> บันทึกเรียบร้อย
+                    </>
+                  ) : (
+                    <>
+                      <Save size={16} /> บันทึกข้อมูล
+                    </>
+                  )}
+                </button>
+              </div>
+
             </div>
           );
         })}
@@ -516,6 +625,201 @@ export default function EvaluationView({ currentUser }) {
         </div>
       )}
 
+      {/* Bottom Global Save Section (เมื่อประเมินเสร็จ หรือต้องการบันทึกความคืบหน้า) */}
+      {totalToEvaluate > 0 && (
+        <div className="glass-panel animate-fade-in" style={{
+          marginTop: '28px',
+          padding: '24px 28px',
+          borderRadius: '20px',
+          background: completedCount === totalToEvaluate && totalToEvaluate > 0
+            ? 'linear-gradient(135deg, rgba(20, 184, 166, 0.18), rgba(139, 92, 246, 0.18))'
+            : 'rgba(255, 255, 255, 0.03)',
+          border: completedCount === totalToEvaluate && totalToEvaluate > 0
+            ? '2px solid rgba(20, 184, 166, 0.5)'
+            : '1px solid var(--border-color)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '16px',
+          boxShadow: completedCount === totalToEvaluate && totalToEvaluate > 0
+            ? '0 12px 36px rgba(20, 184, 166, 0.2)'
+            : 'none'
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+              {completedCount === totalToEvaluate && totalToEvaluate > 0 ? (
+                <div style={{
+                  background: 'rgba(20, 184, 166, 0.2)',
+                  color: '#2dd4bf',
+                  padding: '6px',
+                  borderRadius: '50%',
+                  display: 'flex'
+                }}>
+                  <CheckCircle2 size={24} />
+                </div>
+              ) : (
+                <div style={{
+                  background: 'rgba(245, 158, 11, 0.2)',
+                  color: '#f59e0b',
+                  padding: '6px',
+                  borderRadius: '50%',
+                  display: 'flex'
+                }}>
+                  <Clock size={24} />
+                </div>
+              )}
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
+                {completedCount === totalToEvaluate && totalToEvaluate > 0
+                  ? '🎉 ประเมินหมอนวดครบทั้งกลุ่มแล้ว!'
+                  : `สรุปความคืบหน้าการประเมิน (${completedCount} / ${totalToEvaluate} คน)`
+                }
+              </h3>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', margin: 0 }}>
+              {completedCount === totalToEvaluate && totalToEvaluate > 0
+                ? 'คุณได้ประเมินหมอนวดครบทุกท่านเรียบร้อยแล้ว กดปุ่มด้านขวาเพื่อบันทึกและส่งข้อมูลผลการประเมินขึ้นระบบคลาวด์'
+                : `ประเมินครบแล้ว ${completedCount} คน (ยังเหลืออีก ${totalToEvaluate - completedCount} คน) สามารถกดบันทึกข้อมูลเพื่ออัปเดตระบบได้ตลอดเวลา`
+              }
+            </p>
+          </div>
+
+          <button
+            type="button"
+            disabled={completedCount === 0 || (isClosed && currentUser.role !== 'admin') || isGlobalSaving}
+            onClick={handleSaveAll}
+            className="btn btn-primary"
+            style={{
+              padding: '14px 28px',
+              fontSize: '1rem',
+              fontWeight: 700,
+              borderRadius: '12px',
+              background: completedCount === totalToEvaluate && totalToEvaluate > 0
+                ? 'linear-gradient(135deg, #10b981, #059669)'
+                : 'linear-gradient(135deg, #14b8a6, #8b5cf6)',
+              boxShadow: completedCount === totalToEvaluate && totalToEvaluate > 0
+                ? '0 8px 24px rgba(16, 185, 129, 0.4)'
+                : '0 4px 16px rgba(20, 184, 166, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              cursor: completedCount === 0 || (isClosed && currentUser.role !== 'admin') ? 'not-allowed' : 'pointer',
+              opacity: completedCount === 0 ? 0.6 : 1
+            }}
+          >
+            {isGlobalSaving ? (
+              <span>กำลังบันทึกข้อมูลเข้าระบบ...</span>
+            ) : (
+              <>
+                <Save size={20} />
+                {completedCount === totalToEvaluate && totalToEvaluate > 0
+                  ? 'บันทึกข้อมูลการประเมินทั้งหมด (เสร็จสิ้น)'
+                  : `บันทึกข้อมูลการประเมิน (${completedCount}/${totalToEvaluate} คน)`
+                }
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Modal ยืนยันการบันทึกข้อมูลสำเร็จ */}
+      {isSuccessModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 1100,
+          background: 'rgba(0, 0, 0, 0.8)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div className="glass-panel animate-fade-in" style={{
+            maxWidth: '520px',
+            width: '100%',
+            padding: '32px 28px',
+            textAlign: 'center',
+            borderRadius: '24px',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
+            border: '2px solid rgba(20, 184, 166, 0.5)'
+          }}>
+            <div style={{
+              width: '72px',
+              height: '72px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, rgba(20, 184, 166, 0.2), rgba(16, 185, 129, 0.3))',
+              color: '#2dd4bf',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '20px',
+              border: '2px solid rgba(20, 184, 166, 0.5)'
+            }}>
+              <CheckCircle2 size={44} />
+            </div>
+
+            <h3 style={{ fontSize: '1.45rem', fontWeight: 800, marginBottom: '8px', color: 'var(--text-primary)' }}>
+              บันทึกข้อมูลการประเมินเรียบร้อยแล้ว!
+            </h3>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: '24px' }}>
+              ผลการประเมินหมอนวดจำนวน <strong>{completedCount} คน</strong> ของคุณ <strong>{currentUser.name}</strong> ได้รับการบันทึกและส่งข้อมูลเข้าสู่ระบบ Cloud เรียบร้อยสมบูรณ์แล้ว
+            </p>
+
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.04)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '14px 18px',
+              marginBottom: '24px',
+              border: '1px solid var(--border-color)',
+              textAlign: 'left'
+            }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>
+                สรุปผลคะแนนหมอนวดที่คุณประเมิน:
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {assignedMasseuses.map(m => {
+                  const evalItem = userBehaviorEvals[m.id];
+                  const w = typeof evalItem === 'object' ? evalItem?.welcome : evalItem;
+                  const g = typeof evalItem === 'object' ? evalItem?.grooming : evalItem;
+                  const avg = (w !== null && g !== null && w !== undefined && g !== undefined)
+                    ? Math.round(((Number(w) + Number(g)) / 2) * 10) / 10
+                    : '-';
+                  return (
+                    <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+                        {m.name} ({m.code})
+                      </span>
+                      <span style={{ color: '#2dd4bf', fontWeight: 700 }}>
+                        เฉลี่ย {avg} คะแนน
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsSuccessModalOpen(false)}
+              className="btn btn-primary"
+              style={{
+                width: '100%',
+                padding: '12px',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #14b8a6, #0d9488)'
+              }}
+            >
+              ปิดหน้าต่าง
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+
