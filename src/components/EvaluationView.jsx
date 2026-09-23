@@ -50,7 +50,23 @@ export default function EvaluationView({ currentUser }) {
     setEvaluations(loadedEvals);
     setSystemSettings(loadedSettings);
     setIsClosed(closedStatus);
+
+    const handleSync = (e) => {
+      if (e?.detail) {
+        setEvaluations(e.detail);
+      } else {
+        setEvaluations(getEvaluations());
+      }
+    };
+    window.addEventListener('evaluations_synced', handleSync);
+    window.addEventListener('storage', handleSync);
+
+    return () => {
+      window.removeEventListener('evaluations_synced', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
   }, [currentUser]);
+
 
   const showToast = (msg) => {
     setToastMessage(msg);

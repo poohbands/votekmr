@@ -129,7 +129,21 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
     if (hasDashboardAccess) {
       loadDashboardData();
     }
+
+    const handleSync = () => {
+      if (hasDashboardAccess) {
+        loadDashboardData();
+      }
+    };
+    window.addEventListener('evaluations_synced', handleSync);
+    window.addEventListener('storage', handleSync);
+
+    return () => {
+      window.removeEventListener('evaluations_synced', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
   }, [currentUser, hasDashboardAccess]);
+
 
   const showNotice = (msg) => {
     setNotice(msg);

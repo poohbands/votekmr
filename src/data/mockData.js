@@ -124,6 +124,79 @@ function getCloudApiUrl() {
   return 'https://score-gules.vercel.app/api/sync';
 }
 
+export function mergeEvaluations(evalsA, evalsB) {
+  if (!evalsA && !evalsB) return {};
+  if (!evalsA) return evalsB || {};
+  if (!evalsB) return evalsA || {};
+
+  const merged = {};
+  const allStaffIds = new Set([
+    ...Object.keys(evalsA || {}),
+    ...Object.keys(evalsB || {})
+  ]);
+
+  for (const staffId of allStaffIds) {
+    const sA = evalsA[staffId] || {};
+    const sB = evalsB[staffId] || {};
+
+    merged[staffId] = {
+      behavior: {},
+      responsibility: {}
+    };
+
+    const behA = sA.behavior || {};
+    const behB = sB.behavior || {};
+    const allMasseuseIds = new Set([
+      ...Object.keys(behA),
+      ...Object.keys(behB)
+    ]);
+
+    for (const mId of allMasseuseIds) {
+      const mA = behA[mId];
+      const mB = behB[mId];
+
+      if (mA === undefined && mB === undefined) continue;
+      if (mA === undefined) {
+        merged[staffId].behavior[mId] = mB;
+        continue;
+      }
+      if (mB === undefined) {
+        merged[staffId].behavior[mId] = mA;
+        continue;
+      }
+
+      const objA = typeof mA === 'number' ? { welcome: mA, grooming: mA } : (typeof mA === 'object' && mA !== null ? mA : {});
+      const objB = typeof mB === 'number' ? { welcome: mB, grooming: mB } : (typeof mB === 'object' && mB !== null ? mB : {});
+
+      const subMerged = {};
+
+      if (objA.welcome !== undefined && objB.welcome === undefined) {
+        subMerged.welcome = objA.welcome;
+      } else if (objB.welcome !== undefined && objA.welcome === undefined) {
+        subMerged.welcome = objB.welcome;
+      } else if (objA.welcome !== undefined && objB.welcome !== undefined) {
+        subMerged.welcome = objB.welcome ?? objA.welcome;
+      }
+
+      if (objA.grooming !== undefined && objB.grooming === undefined) {
+        subMerged.grooming = objA.grooming;
+      } else if (objB.grooming !== undefined && objA.grooming === undefined) {
+        subMerged.grooming = objB.grooming;
+      } else if (objA.grooming !== undefined && objB.grooming !== undefined) {
+        subMerged.grooming = objB.grooming ?? objA.grooming;
+      }
+
+      merged[staffId].behavior[mId] = subMerged;
+    }
+
+    const respA = sA.responsibility || {};
+    const respB = sB.responsibility || {};
+    merged[staffId].responsibility = { ...respA, ...respB };
+  }
+
+  return merged;
+}
+
 let isPullingCloud = false;
 
 export async function pullFromCloud() {
@@ -186,7 +259,11 @@ export async function pullFromCloud() {
       }
       if (data.evaluations && typeof data.evaluations === 'object') {
         const localEvals = getEvaluations();
-        localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify({ ...localEvals, ...data.evaluations }));
+        const mergedEvals = mergeEvaluations(localEvals, data.evaluations);
+        localStorage.setItem(STORAGE_KEYS.EVALUATIONS, JSON.stringify(mergedEvals));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('evaluations_synced', { detail: mergedEvals }));
+        }
       }
       if (data.settings && typeof data.settings === 'object') {
         localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(data.settings));
@@ -204,7 +281,15 @@ export async function pullFromCloud() {
   return false;
 }
 
+let isPushing = false;
+let pendingPush = false;
+
 export async function pushToCloud() {
+  if (isPushing) {
+    pendingPush = true;
+    return false;
+  }
+  isPushing = true;
   try {
     const payload = {
       customStaff: getCustomStaff(),
@@ -220,12 +305,19 @@ export async function pushToCloud() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    isPushing = false;
+    if (pendingPush) {
+      pendingPush = false;
+      return pushToCloud();
+    }
     return res.ok;
   } catch (err) {
     console.warn('Cloud push warning:', err);
+    isPushing = false;
     return false;
   }
 }
+
 
 // --- Internal Helper Getters/Setters ---
 

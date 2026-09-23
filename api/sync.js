@@ -15,6 +15,79 @@ const DEFAULT_DATA = {
 
 let inMemoryStore = null;
 
+function mergeEvaluations(evalsA, evalsB) {
+  if (!evalsA && !evalsB) return {};
+  if (!evalsA) return evalsB || {};
+  if (!evalsB) return evalsA || {};
+
+  const merged = {};
+  const allStaffIds = new Set([
+    ...Object.keys(evalsA || {}),
+    ...Object.keys(evalsB || {})
+  ]);
+
+  for (const staffId of allStaffIds) {
+    const sA = evalsA[staffId] || {};
+    const sB = evalsB[staffId] || {};
+
+    merged[staffId] = {
+      behavior: {},
+      responsibility: {}
+    };
+
+    const behA = sA.behavior || {};
+    const behB = sB.behavior || {};
+    const allMasseuseIds = new Set([
+      ...Object.keys(behA),
+      ...Object.keys(behB)
+    ]);
+
+    for (const mId of allMasseuseIds) {
+      const mA = behA[mId];
+      const mB = behB[mId];
+
+      if (mA === undefined && mB === undefined) continue;
+      if (mA === undefined) {
+        merged[staffId].behavior[mId] = mB;
+        continue;
+      }
+      if (mB === undefined) {
+        merged[staffId].behavior[mId] = mA;
+        continue;
+      }
+
+      const objA = typeof mA === 'number' ? { welcome: mA, grooming: mA } : (typeof mA === 'object' && mA !== null ? mA : {});
+      const objB = typeof mB === 'number' ? { welcome: mB, grooming: mB } : (typeof mB === 'object' && mB !== null ? mB : {});
+
+      const subMerged = {};
+
+      if (objA.welcome !== undefined && objB.welcome === undefined) {
+        subMerged.welcome = objA.welcome;
+      } else if (objB.welcome !== undefined && objA.welcome === undefined) {
+        subMerged.welcome = objB.welcome;
+      } else if (objA.welcome !== undefined && objB.welcome !== undefined) {
+        subMerged.welcome = objB.welcome ?? objA.welcome;
+      }
+
+      if (objA.grooming !== undefined && objB.grooming === undefined) {
+        subMerged.grooming = objA.grooming;
+      } else if (objB.grooming !== undefined && objA.grooming === undefined) {
+        subMerged.grooming = objB.grooming;
+      } else if (objA.grooming !== undefined && objB.grooming !== undefined) {
+        subMerged.grooming = objB.grooming ?? objA.grooming;
+      }
+
+      merged[staffId].behavior[mId] = subMerged;
+    }
+
+    const respA = sA.responsibility || {};
+    const respB = sB.responsibility || {};
+    merged[staffId].responsibility = { ...respA, ...respB };
+  }
+
+  return merged;
+}
+
 async function loadLatestData() {
   let blobData = null;
   try {
@@ -43,7 +116,7 @@ async function loadLatestData() {
 
     base.staffOverrides = { ...(blobData.staffOverrides || {}), ...(inMemoryStore.staffOverrides || {}) };
     base.masseuseOverrides = { ...(blobData.masseuseOverrides || {}), ...(inMemoryStore.masseuseOverrides || {}) };
-    base.evaluations = { ...(blobData.evaluations || {}), ...(inMemoryStore.evaluations || {}) };
+    base.evaluations = mergeEvaluations(blobData.evaluations, inMemoryStore.evaluations);
     base.settings = { ...(blobData.settings || {}), ...(inMemoryStore.settings || {}) };
     base.assignments = { ...(blobData.assignments || {}), ...(inMemoryStore.assignments || {}) };
   }
@@ -51,6 +124,7 @@ async function loadLatestData() {
   inMemoryStore = base;
   return base;
 }
+
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -107,9 +181,10 @@ export default async function handler(req, res) {
           m => !currentData.masseuseOverrides?.[m.id]?.isDeleted
         );
 
-        if (payload.evaluations) {
-          currentData.evaluations = { ...(currentData.evaluations || {}), ...payload.evaluations };
+        if (payload.evaluations && typeof payload.evaluations === 'object') {
+          currentData.evaluations = mergeEvaluations(currentData.evaluations, payload.evaluations);
         }
+
         if (payload.settings) {
           currentData.settings = { ...(currentData.settings || {}), ...payload.settings };
         }
