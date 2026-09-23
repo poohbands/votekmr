@@ -210,7 +210,11 @@ export default async function handler(req, res) {
           currentData.evaluations = {};
           currentData.evaluationsResetAt = resetTime;
         } else if (payload.evaluations && typeof payload.evaluations === 'object') {
-          currentData.evaluations = mergeEvaluations(currentData.evaluations, payload.evaluations);
+          if (payload.overwriteEvaluations) {
+            currentData.evaluations = payload.evaluations;
+          } else {
+            currentData.evaluations = mergeEvaluations(currentData.evaluations, payload.evaluations);
+          }
           if (payload.evaluationsResetAt && payload.evaluationsResetAt > (currentData.evaluationsResetAt || 0)) {
             currentData.evaluationsResetAt = payload.evaluationsResetAt;
           }

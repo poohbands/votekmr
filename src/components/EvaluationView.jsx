@@ -29,7 +29,6 @@ export default function EvaluationView({ currentUser }) {
   const [evaluations, setEvaluations] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [viewScope, setViewScope] = useState('assigned');
   const [toastMessage, setToastMessage] = useState('');
   const [systemSettings, setSystemSettings] = useState({});
   const [isClosed, setIsClosed] = useState(false);
@@ -125,12 +124,8 @@ export default function EvaluationView({ currentUser }) {
 
   const userBehaviorEvals = evaluations[currentUser.id]?.behavior || {};
   const assignedIds = assignments[currentUser.id] || [];
-  const userEvaluatedIds = Object.keys(userBehaviorEvals);
-  const targetAssignedIds = Array.from(new Set([...assignedIds, ...userEvaluatedIds]));
-  const assignedMasseuses = masseuses.filter(m => targetAssignedIds.includes(m.id));
-  const activeMasseuseList = (currentUser.role === 'admin' && viewScope === 'all')
-    ? masseuses
-    : assignedMasseuses;
+  const assignedMasseuses = masseuses.filter(m => assignedIds.includes(m.id));
+  const activeMasseuseList = assignedMasseuses;
 
   const filteredList = activeMasseuseList.filter(m => {
     const matchesSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -237,14 +232,11 @@ export default function EvaluationView({ currentUser }) {
                 การประเมินพฤติกรรมหมอนวด
               </h2>
               <span className="badge badge-purple" style={{ fontSize: '0.78rem' }}>
-                {viewScope === 'all' ? `หมอนวดทั้งหมด ${masseuses.length} คน` : `กลุ่มสุ่ม ${totalToEvaluate} คน`}
+                กลุ่มที่ได้รับมอบหมาย {totalToEvaluate} คน
               </span>
             </div>
             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-              {viewScope === 'all'
-                ? `โหมดผู้ดูแลระบบ (Admin): แสดงรายชื่อหมอนวดทั้งหมด ${masseuses.length} คน สามารถตรวจดูหรือช่วยลงคะแนนได้ทุกท่าน`
-                : <>คุณ <strong>{currentUser.name}</strong> ได้รับมอบหมายประเมินหมอนวดจำนวน <strong>{totalToEvaluate} คน</strong> โดยประเมิน 2 หัวข้อย่อย (คะแนน 1 - 10)</>
-              }
+              คุณ <strong>{currentUser.name}</strong> ได้รับมอบหมายประเมินหมอนวดจำนวน <strong>{totalToEvaluate} คน</strong> โดยประเมิน 2 หัวข้อย่อย (คะแนน 1 - 10)
             </p>
           </div>
 
@@ -355,28 +347,6 @@ export default function EvaluationView({ currentUser }) {
               onChange={e => setSearchTerm(e.target.value)}
             />
           </div>
-
-          {/* Admin View Scope Switcher */}
-          {currentUser.role === 'admin' && (
-            <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.05)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border-color)', gap: '4px' }}>
-              <button
-                type="button"
-                onClick={() => setViewScope('assigned')}
-                className={`btn ${viewScope === 'assigned' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ padding: '6px 12px', fontSize: '0.82rem', borderRadius: '6px' }}
-              >
-                กลุ่มที่ฉันรับผิดชอบ ({assignedMasseuses.length} คน)
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewScope('all')}
-                className={`btn ${viewScope === 'all' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ padding: '6px 12px', fontSize: '0.82rem', borderRadius: '6px' }}
-              >
-                หมอนวดทุกคน ({masseuses.length} คน)
-              </button>
-            </div>
-          )}
         </div>
 
         <div style={{ display: 'flex', gap: '6px' }}>

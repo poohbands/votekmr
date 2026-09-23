@@ -715,7 +715,7 @@ function shuffleArray(array) {
   return arr;
 }
 
-// Generate behavior group assignments (deterministic by default, or random shuffle when requested)
+// Generate behavior group assignments (30 masseuses / 6 evaluators = exactly 5 each, strictly disjoint)
 export function generateBehaviorAssignments(isRandom = false) {
   const masseuseList = getMasseuses();
   const staffList = getStaffUsers();
@@ -730,22 +730,32 @@ export function generateBehaviorAssignments(isRandom = false) {
     return assignments;
   }
 
-  let masseuseIds;
+  // Ensure unique masseuses
+  const uniqueMasseuses = [];
+  const seenIds = new Set();
+  for (const m of masseuseList) {
+    if (m && m.id && !seenIds.has(m.id)) {
+      seenIds.add(m.id);
+      uniqueMasseuses.push(m);
+    }
+  }
+
+  let orderedIds;
   if (isRandom) {
-    masseuseIds = shuffleArray(masseuseList.map(m => m.id));
+    orderedIds = shuffleArray(uniqueMasseuses.map(m => m.id));
   } else {
     // Sort deterministically by code (MN-01, MN-02, ...)
-    const sorted = [...masseuseList].sort((a, b) => (a.code || '').localeCompare(b.code || '', undefined, { numeric: true }));
-    masseuseIds = sorted.map(m => m.id);
+    const sorted = [...uniqueMasseuses].sort((a, b) => (a.code || '').localeCompare(b.code || '', undefined, { numeric: true }));
+    orderedIds = sorted.map(m => m.id);
   }
 
   // Divide into groups of 5 masseuses per evaluator (e.g. 30 masseuses / 6 evaluators = 5 each)
-  const groupSize = Math.max(1, Math.floor(masseuseIds.length / behaviorEvaluators.length));
+  const groupSize = Math.max(1, Math.floor(orderedIds.length / behaviorEvaluators.length));
 
   behaviorEvaluators.forEach((evaluator, index) => {
     const start = index * groupSize;
-    const end = index === behaviorEvaluators.length - 1 ? masseuseIds.length : start + groupSize;
-    assignments[evaluator.id] = masseuseIds.slice(start, end);
+    const end = index === behaviorEvaluators.length - 1 ? orderedIds.length : start + groupSize;
+    assignments[evaluator.id] = orderedIds.slice(start, end);
   });
 
   localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments));
@@ -761,7 +771,24 @@ export function getBehaviorAssignments() {
     try {
       const parsed = JSON.parse(stored);
       if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-        return parsed;
+        // Validate that assignments are strictly disjoint with zero overlap
+        const seen = new Set();
+        let hasOverlap = false;
+        for (const ids of Object.values(parsed)) {
+          if (Array.isArray(ids)) {
+            for (const id of ids) {
+              if (seen.has(id)) {
+                hasOverlap = true;
+                break;
+              }
+              seen.add(id);
+            }
+          }
+          if (hasOverlap) break;
+        }
+        if (!hasOverlap && seen.size > 0) {
+          return parsed;
+        }
       }
     } catch (e) {
       console.error('Failed to parse behavior assignments:', e);
@@ -814,6 +841,14 @@ export function saveBehaviorSubScore(staffId, masseuseId, subKey, score) {
   if (isEvaluationClosed()) {
     throw new Error('ระบบปิดรับการประเมินแล้ว ไม่สามารถบันทึกคะแนนเพิ่มเติมได้');
   }
+
+  // Enforce: Masseuse can only be evaluated by their assigned evaluator!
+  const assignments = getBehaviorAssignments();
+  const assignedToStaff = assignments[staffId] || [];
+  if (!assignedToStaff.includes(masseuseId)) {
+    throw new Error('หมอนวดท่านนี้ไม่ได้อยู่ในกลุ่มที่คุณได้รับมอบหมาย (หมอนวด 1 คนจะถูกประเมินได้โดยผู้ประเมินที่รับผิดชอบคนเดียวเท่านั้น)');
+  }
+
   const allEvals = getEvaluations();
   if (!allEvals[staffId]) {
     allEvals[staffId] = { behavior: {}, responsibility: {} };
@@ -871,6 +906,7 @@ export function saveStaffEvaluations(staffId, category, scoresMap) {
 }
 
 // Calculate Staff Evaluation Progress Report for Admin (Behavior Evaluation)
+// Rule: Exactly 1 assigned group per evaluator, strictly disjoint
 export function getStaffProgressReport() {
   const staffList = getStaffUsers();
   const assignments = getBehaviorAssignments();
@@ -879,20 +915,10 @@ export function getStaffProgressReport() {
   return staffList.map(staff => {
     const userEvals = evaluations[staff.id]?.behavior || {};
     const assignedIds = assignments[staff.id] || [];
-
-    // Also include any masseuse ID that this user actually evaluated
-    const evaluatedIds = Object.keys(userEvals).filter(id => {
-      const score = userEvals[id];
-      if (score === null || score === undefined) return false;
-      if (typeof score === 'number') return true;
-      return score.welcome !== undefined || score.grooming !== undefined;
-    });
-
-    const allTargetIds = Array.from(new Set([...assignedIds, ...evaluatedIds]));
-    const behTotal = Math.max(assignedIds.length, allTargetIds.length);
+    const behTotal = assignedIds.length;
 
     // Completed if both 2.1 (welcome) and 2.2 (grooming) are evaluated
-    const behCompleted = allTargetIds.filter(id => {
+    const behCompleted = assignedIds.filter(id => {
       const score = userEvals[id];
       if (score === null || score === undefined) return false;
       if (typeof score === 'number') return true;
@@ -908,12 +934,13 @@ export function getStaffProgressReport() {
       behPercent,
       isBehaviorEvaluator: staff.isBehaviorEvaluator,
       overallPercent: behPercent,
-      isFullyCompleted: behTotal > 0 && behCompleted >= behTotal
+      isFullyCompleted: behTotal > 0 && behCompleted === behTotal
     };
   });
 }
 
 // Calculate comprehensive results for Admin Dashboard (Behavior-Only Evaluation)
+// Rule: Each masseuse belongs to exactly 1 group, and can be evaluated by 1 evaluator only.
 export function calculateResults() {
   const masseusesList = getMasseuses();
   const assignments = getBehaviorAssignments();
@@ -922,76 +949,48 @@ export function calculateResults() {
   const behaviorEvaluators = staffList.filter(s => s.isBehaviorEvaluator);
 
   const results = masseusesList.map(m => {
-    // 1. Find all evaluators assigned to this masseuse
-    const assignedStaffIds = behaviorEvaluators
-      .filter(e => assignments[e.id]?.includes(m.id))
-      .map(e => e.id);
-
-    // 2. Find all evaluators who actually submitted evaluations for this masseuse
-    const whoEvaluated = staffList.filter(s => {
-      const b = evaluations[s.id]?.behavior?.[m.id];
-      if (b === null || b === undefined) return false;
-      if (typeof b === 'number') return true;
-      return typeof b === 'object' && (b.welcome !== undefined || b.grooming !== undefined);
-    });
-
-    const evaluatedStaffIds = whoEvaluated.map(s => s.id);
-
-    // 3. Combined effective staff IDs (evaluated take priority, plus assigned)
-    const effectiveStaffIds = Array.from(new Set([
-      ...(evaluatedStaffIds.length > 0 ? evaluatedStaffIds : []),
-      ...assignedStaffIds
-    ]));
-
-    const assignedBehaviorStaffName = effectiveStaffIds.length > 0
-      ? effectiveStaffIds.map(id => staffList.find(s => s.id === id)?.name || id).join(', ')
-      : '-';
-
-    // 4. Calculate welcome & grooming scores (average across all submitted evaluations)
-    let welcomeSum = 0, welcomeCount = 0;
-    let groomingSum = 0, groomingCount = 0;
-
-    for (const s of whoEvaluated) {
-      const raw = evaluations[s.id]?.behavior?.[m.id];
-      if (raw !== null && raw !== undefined) {
-        if (typeof raw === 'number') {
-          welcomeSum += raw;
-          welcomeCount++;
-          groomingSum += raw;
-          groomingCount++;
-        } else if (typeof raw === 'object') {
-          if (raw.welcome !== undefined && raw.welcome !== null) {
-            welcomeSum += Number(raw.welcome);
-            welcomeCount++;
-          }
-          if (raw.grooming !== undefined && raw.grooming !== null) {
-            groomingSum += Number(raw.grooming);
-            groomingCount++;
-          }
-        }
+    // 1. Find the single evaluator assigned to this masseuse
+    let assignedStaffId = null;
+    for (const evaluator of behaviorEvaluators) {
+      if (assignments[evaluator.id]?.includes(m.id)) {
+        assignedStaffId = evaluator.id;
+        break;
       }
     }
 
-    const welcomeScore = welcomeCount > 0 ? Math.round((welcomeSum / welcomeCount) * 10) / 10 : null;
-    const groomingScore = groomingCount > 0 ? Math.round((groomingSum / groomingCount) * 10) / 10 : null;
+    const assignedStaffName = staffList.find(s => s.id === assignedStaffId)?.name || '-';
 
+    // 2. Score comes ONLY from the assigned evaluator
+    const rawEval = (assignedStaffId && evaluations[assignedStaffId]?.behavior?.[m.id]) ?? null;
+
+    let welcomeScore = null;
+    let groomingScore = null;
     let behaviorScore = null;
-    if (welcomeScore !== null && groomingScore !== null) {
-      behaviorScore = Math.round(((welcomeScore + groomingScore) / 2) * 10) / 10;
-    } else if (welcomeScore !== null) {
-      behaviorScore = welcomeScore;
-    } else if (groomingScore !== null) {
-      behaviorScore = groomingScore;
+
+    if (rawEval !== null && rawEval !== undefined) {
+      if (typeof rawEval === 'number') {
+        welcomeScore = rawEval;
+        groomingScore = rawEval;
+        behaviorScore = rawEval;
+      } else if (typeof rawEval === 'object') {
+        welcomeScore = rawEval.welcome ?? null;
+        groomingScore = rawEval.grooming ?? null;
+        if (welcomeScore !== null && groomingScore !== null) {
+          behaviorScore = Math.round(((welcomeScore + groomingScore) / 2) * 10) / 10;
+        } else if (welcomeScore !== null) {
+          behaviorScore = welcomeScore;
+        } else if (groomingScore !== null) {
+          behaviorScore = groomingScore;
+        }
+      }
     }
 
     const totalScore = behaviorScore;
 
     return {
       masseuse: m,
-      assignedBehaviorStaffId: assignedStaffIds[0] || effectiveStaffIds[0] || null,
-      assignedStaffIds: effectiveStaffIds,
-      evaluatedStaffIds,
-      assignedBehaviorStaffName,
+      assignedBehaviorStaffId: assignedStaffId,
+      assignedBehaviorStaffName: assignedStaffName,
       welcomeScore,
       groomingScore,
       behaviorScore,

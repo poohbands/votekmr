@@ -399,13 +399,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
     );
   }
 
-  const isEvaluatorForMasseuse = (r, staffId) => {
-    return r.assignedStaffIds?.includes(staffId) ||
-           r.assignedBehaviorStaffId === staffId ||
-           r.evaluatedStaffIds?.includes(staffId);
-  };
-
-  const myGroupResults = results.filter(r => isEvaluatorForMasseuse(r, currentUser.id));
+  const myGroupResults = results.filter(r => r.assignedBehaviorStaffId === currentUser.id);
   const myGroupCount = myGroupResults.length;
   const myGroupCompleted = myGroupResults.filter(r => r.totalScore !== null).length;
   const totalCompletedCount = results.filter(r => r.totalScore !== null).length;
@@ -417,7 +411,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
     if (!matchesSearch) return false;
 
     if (evaluatorFilter === 'my_group') {
-      return isEvaluatorForMasseuse(r, currentUser.id);
+      return r.assignedBehaviorStaffId === currentUser.id;
     }
     if (evaluatorFilter === 'evaluated') {
       return r.totalScore !== null;
@@ -426,7 +420,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
       return r.totalScore === null;
     }
     if (evaluatorFilter !== 'all') {
-      return isEvaluatorForMasseuse(r, evaluatorFilter);
+      return r.assignedBehaviorStaffId === evaluatorFilter;
     }
     return true;
   });
@@ -997,7 +991,7 @@ export default function AdminDashboard({ currentUser, onSettingsChange }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '16px' }}>
             {staffUsers.filter(s => s.isBehaviorEvaluator).map(evaluator => {
-              const assignedMasseuses = results.filter(r => isEvaluatorForMasseuse(r, evaluator.id));
+              const assignedMasseuses = results.filter(r => r.assignedBehaviorStaffId === evaluator.id);
               const completedCount = assignedMasseuses.filter(r => r.welcomeScore !== null && r.groomingScore !== null).length;
               const isAllDone = assignedMasseuses.length > 0 && completedCount === assignedMasseuses.length;
 
